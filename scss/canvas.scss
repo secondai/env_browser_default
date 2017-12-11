@@ -1,0 +1,71 @@
+
+
+@mixin flex-container {
+
+  display: flex;
+  overflow: hidden;
+
+  > * {
+
+    flex: 0 0 auto;
+    overflow: scroll;
+  }  
+}
+
+@mixin stretchy {
+
+  flex: 1 1 auto;
+}
+
+@mixin flex-column {
+  flex-direction: column;
+}
+
+html,
+body,
+#root,
+.full-screen {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+}
+
+.full-screen {
+
+  @include flex-container;
+  @include flex-column;
+
+  > .flex-header,
+  > .flex-footer {
+    height: 50px;
+    
+    background: #555;
+    color: white;
+  }
+  > .flex-footer {
+    height: 10px;
+  }
+
+  > .flex-main {
+    @include stretchy;
+
+    @include flex-container;
+
+    > .flex-left {
+      border-right: 1px solid #ccc;
+    }
+    
+    > .flex-left,
+    > .flex-right {
+      width: 300px;
+
+      background: #eee;
+    }
+
+    > .flex-middle {
+      @include stretchy;
+    }
+  }
+}
