@@ -312,8 +312,7 @@ class App extends Component {
       useLocalforage: false,
       useLocalZip: false,
       nodesDb: [], // empty at first, will load from indexDb (localForage) 
-      startupZipUrl: 'https://github.com/secondai/bundle_browser_user',
-
+      startupZipUrl: process.env.REACT_APP_STARTUP_GITHUB_BUNDLE || ''
     }
 
   }
@@ -1716,7 +1715,7 @@ class App extends Component {
                   Second
                 </h1>
                 <h2 className="subtitle">
-                  App Hub
+                  Developer Browser App Startup
                 </h2>
               </div>
             </div>
@@ -1776,7 +1775,7 @@ class App extends Component {
                     Remote Zip File
                   </h2>
                   <h2 className="subtitle is-6">
-                    github links parsed automatically
+                    github repository links parsed automatically
                   </h2>
                   
 
