@@ -37,6 +37,10 @@ body {
   @include flex-container;
   @include flex-column;
 
+  > .flex-header {
+    overflow: visible;
+  }
+
   > .flex-header,
   > .flex-footer {
     height: 50px;

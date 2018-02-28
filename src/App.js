@@ -10,6 +10,8 @@ import {
   withRouter as ReactRouterDomWithRouter
 } from 'react-router-dom'
 
+import { Speechless } from "speechless";
+
 
 // import ReactTooltip from 'react-tooltip' // cant get it working
 
@@ -17,6 +19,9 @@ import 'react-tippy/dist/tippy.css';
 import {
   Tooltip,
 } from 'react-tippy';
+
+import ReactSelect from 'react-select';
+import 'react-select/dist/react-select.css';
 
 import autobind from 'autobind-decorator'
 import localforage from 'localforage'
@@ -61,6 +66,8 @@ import 'brace/theme/monokai';
 import 'brace/ext/language_tools';
 import 'brace/ext/searchbox';
 
+import GitHub from 'github-api';
+
 
 const USE_OLD_START = false;
 const NEW_MEMORY_ON_REFRESH = true;
@@ -73,6 +80,17 @@ const BASIC_NODES = {
   user: require('./basics/user.json')
 }
 
+let ZipNodes = []; // will be populated to match BASIC_NODES.xyz
+
+const parseGitHubUrl = require('parse-github-url');
+
+const JSZip = require('jszip');
+const JSZipUtils = require('jszip-utils');
+
+const Please = require('pleasejs');
+const vein = require('veinjs');
+
+const annyang = require('annyang');
 
 var getDirName = require('path').dirname;
 const rsa = require('node-rsa');
@@ -119,6 +137,7 @@ var uuidv4 = require('uuid/v4');
 var createReactClass = require('create-react-class');
 
 var vm = require('vm-browserify');
+var SHA1 = require("crypto-js/sha1");
 var SHA256 = require("crypto-js/sha256");
 
 // temporary location for code for incoming_from_universe:0.0.1:local:298fj293
@@ -131,6 +150,9 @@ const CODENODE = {
 // Higher Order Components
 const withSecond = (WrappedComponent) => {
   return class HOC extends Component {
+    constructor(props){
+      super(props);
+    }
 
     // define what is needed from context
     static contextTypes = {
@@ -141,6 +163,20 @@ const withSecond = (WrappedComponent) => {
       // const { Second, updateAuth } = this.context
       return (
         <WrappedComponent {...this.props} Second={this.context.Second}/>
+      )
+    }
+  }
+}
+
+const withNodesHOC = (WrappedComponent, nodes) => {
+  return class withNodesHOC extends Component {
+    constructor(props){
+      super(props);
+    }
+    render() {
+      // const { Second, updateAuth } = this.context
+      return (
+        <WrappedComponent {...this.props} nodes={nodes}/>
       )
     }
   }
@@ -238,7 +274,19 @@ class StartupNodeComponent extends React.Component {
   }
   render() {
     return (
-      <div>LoadingStartupNode</div>
+      <section className="hero is-fullheight">
+        <div className="hero-body">
+          <div className="container">
+            <h1 className="title is-5 has-text-centered" style={{opacity:'0.5'}}>
+              <div className="button is-white is-loading">
+                &nbsp;
+              </div>
+              <br />
+              Loading StartupNode
+            </h1>
+          </div>
+        </div>
+      </section>
     )
   }
 }
@@ -261,7 +309,11 @@ class App extends Component {
       choosing: true,
       localAppsList: [], // array of objects: { storageKey: String, basicKey: BASIC_NODE_TYPE }
       storedAppsList: {},
+      useLocalforage: false,
+      useLocalZip: false,
       nodesDb: [], // empty at first, will load from indexDb (localForage) 
+      startupZipUrl: 'https://github.com/secondai/bundle_browser_user',
+
     }
 
   }
@@ -483,10 +535,17 @@ class App extends Component {
       if(this.state.useLocalforage){
         console.log('using LOCALFORAGE-stored ui app!');
         startNodes = this.state.storedAppsList[this.state.basicKey];
+      } else if(this.state.useLocalZip) {
+        console.log('using ZipNodes for ui app');
+        startNodes = ZipNodes;
       } else {
         console.log('using ON-DISK -stored ui app!');
         startNodes = BASIC_NODES[this.state.basicKey];
       }
+
+      console.log('StartNodes:', startNodes);
+      // return false;
+
 
       for(let node of startNodes){
         await this.insertNode(node);
@@ -574,12 +633,33 @@ class App extends Component {
   @autobind
   createAndRunVM(codeNode, InputNode){
 
+
+    const ReactHelpers = (WrappedComponent) => {
+      return class ReactHelpersHOC extends React.Component {
+        constructor(props) {
+          super(props);
+        }
+        loadComponent(dataFilter){
+          return universe.loadComponent(dataFilter);
+        }
+
+        render() {
+          return <WrappedComponent {...this.props} loadComponent={this.loadComponent} />
+        }
+      }
+    }
+
+
     let universe = {
       // React, // React.Component is available 
       $,
+      localStorage,
       alert,
+      console,
       copy, // to clipboard
       jsSchema,
+      SHA1,
+      SHA256,
       createReactClass,
       ReactRouterDomRouter,
       ReactRouterDomRoute,
@@ -590,6 +670,14 @@ class App extends Component {
       ReactContextMenu: { ContextMenu, MenuItem, ContextMenuTrigger },
       ReactResizeDetector,
       ReactTooltip: Tooltip,
+      ReactSelect,
+      ReactHelpers,
+      ReactWithNodes: withNodesHOC,
+      Speechless,
+      GitHub,
+      annyang,
+      Please,
+      vein,
       // Radium,
       RecreateChildOnPropsChange,
       withEditManager,
@@ -599,7 +687,17 @@ class App extends Component {
       uuidv4,
       bitcoin,
       bigi,
-      setTimeout: window.setTimeout,
+      cJSON: require('circular-json'),
+      setTimeout: (func, ms)=>{
+        return new Promise((resolve,reject)=>{
+          window.setTimeout(()=>{
+            if(func){
+              func();
+            }
+            resolve();
+          },ms);
+        })
+      },
       EE, // instance of EventEmitter
       directToSecond: (opts)=>{
         // to an External second
@@ -801,7 +899,7 @@ class App extends Component {
 
           // currently just using "language" server! (not on bitcoin/ipfs while testing) 
 
-          let data = JSON.parse('{"operationName":null,"variables":{"address":"'+address+'"},"query":"query ($address: String) {  walletOne(filter: {address: $address}) {    _id    address    transactions { txId   text }    createdAt    updatedAt    __typename  }}"}');
+          let data = JSON.parse('{"operationName":null,"variables":{"address":"'+address+'"},"query":"query ($address: String) {  viewer { wallet { one(filter: {address: $address}) {    _id    address    transactions { txId   text }    createdAt    updatedAt    __typename  }}}}"}');
           data = JSON.stringify(data);
           $.ajax({
             url: 'http://lang.second.ngrok.io/graphql',
@@ -810,7 +908,7 @@ class App extends Component {
             data: data,
             success: walletResult=>{
               // console.log('Languages', walletResult);
-              if(!walletResult.data.walletOne){
+              if(!walletResult.data.viewer.wallet.one){
                 console.error('Missing Wallet for this address!');
                 return reject();
               }
@@ -818,10 +916,10 @@ class App extends Component {
 
               // Now get ipfs info 
               // - todo, using language server still
-              let hash = walletResult.data.walletOne.transactions[0].text; // first result in transaction list 
+              let hash = walletResult.data.viewer.wallet.one.transactions[0].text; // first result in transaction list 
 
 
-              let data = JSON.parse('{"operationName":null,"variables":{"hash":"'+hash+'"},"query":"query ($hash: String) {  ipfsFileOne(filter: {hash: $hash}) {    _id    hash    text    createdAt    updatedAt    __typename  }}"}');
+              let data = JSON.parse('{"operationName":null,"variables":{"hash":"'+hash+'"},"query":"query ($hash: String) {  viewer { ipfsFile { one(filter: {hash: $hash}) {    _id    hash    text    createdAt    updatedAt    __typename  }}}}"}');
               data = JSON.stringify(data);
               $.ajax({
                 url: 'http://lang.second.ngrok.io/graphql',
@@ -830,7 +928,7 @@ class App extends Component {
                 data: data,
                 success: ipfsResult=>{
                   // console.log('Languages', ipfsResult);
-                  if(!ipfsResult.data.ipfsFileOne){
+                  if(!ipfsResult.data.viewer.ipfsFile.one){
                     console.error('Missing ipfsFile for this wallet transaction hash!');
                     return reject();
                   }
@@ -838,14 +936,14 @@ class App extends Component {
 
                   // Now get ipfs info 
                   // - todo, using language server still
-                  console.log('text:', ipfsResult.data.ipfsFileOne.text, typeof ipfsResult.data.ipfsFileOne.text);
-                  window.xx = ipfsResult.data.ipfsFileOne.text;
+                  console.log('text:', ipfsResult.data.viewer.ipfsFile.one.text, typeof ipfsResult.data.viewer.ipfsFile.one.text);
+                  window.xx = ipfsResult.data.viewer.ipfsFile.one.text;
 
                   let node;
-                  if(lodash.isString(ipfsResult.data.ipfsFileOne.text)){
-                    node = JSON.parse(ipfsResult.data.ipfsFileOne.text);
+                  if(lodash.isString(ipfsResult.data.viewer.ipfsFile.one.text)){
+                    node = JSON.parse(ipfsResult.data.viewer.ipfsFile.one.text);
                   } else {
-                    node = ipfsResult.data.ipfsFileOne.text;
+                    node = ipfsResult.data.viewer.ipfsFile.one.text;
                   }
 
                   return resolve(node);
@@ -1011,6 +1109,37 @@ class App extends Component {
           })
 
         })
+      },
+      loadComponent(dataFilter){
+
+        return new Promise(async (resolve, reject)=>{
+
+          // let componentCommands = await this.props.loadComponent({
+          //   internalId: 'ListComponent'
+          // });
+          // this.setState({
+          //   componentCommands
+          // })
+
+          try {
+              
+            let result = await universe.searchMemory({
+              filter: {
+                sqlFilter: {
+                  type: 'react_component:0.0.1:local:98912hd89',
+                  data: dataFilter
+                }
+              }
+            });
+            let componentNode = await universe.runInVM(result[0],{});
+            resolve(componentNode.data);
+          } catch(err){
+            console.error('Failed getting component:', dataFilter);
+            resolve(null);
+          }
+
+        });
+        
       }
     }
 
@@ -1113,8 +1242,11 @@ class App extends Component {
   @autobind
   makeUpdate(updateObj){
     // saving a new nodesDb
-    localforage.setItem(this.state.storageKey, updateObj).then(()=>{ // SECOND_NODES_DB_KEY
-      localStorage.setItem('latest-storage-update',JSON.stringify((new Date()).getTime()));
+    return new Promise((resolve,reject)=>{
+      localforage.setItem(this.state.storageKey, updateObj).then(()=>{ // SECOND_NODES_DB_KEY
+        resolve();
+        // localStorage.setItem('latest-storage-update',JSON.stringify((new Date()).getTime()));
+      });
     });
   }
 
@@ -1349,6 +1481,160 @@ class App extends Component {
   }
 
   @autobind
+  handleCreateNewSecondFromRemoteZip(){
+
+    // Loads nodes from github 
+    // - downloads and extracts a zip file, or gets the nodes individually? 
+
+    console.log('startupZipUrl1:', this.state.startupZipUrl);
+
+    // converts startup git url into username/password 
+    // - eventually allow links to be pasted, parse accordingly 
+
+    // parse github links and re-organize to fit .zip model 
+
+    let url = this.state.startupZipUrl;
+
+    let gh = parseGitHubUrl(url);
+    if(gh.owner && 
+      gh.name && 
+      gh.repo && 
+      gh.branch){
+      url = `https://github.com/${gh.repo}/archive/${gh.branch}.zip`;
+    }
+
+    // cannot simply follow github zipball/tarball links :( 
+    fetch(`https://cors-anywhere.herokuapp.com/${url}`,{
+      // mode: 'no-cors' 
+    })
+    .then(response=>{
+      // console.log('Response:', response);
+      return response.arrayBuffer();
+    })
+    .then(JSZip.loadAsync)
+    // .then(=>{
+      // JSZip.loadAsync(arrBuff)
+      .then(async (zip)=>{
+        console.log('loaded zip data!', zip);
+
+        // ZIP is valid! 
+        let files = zip.files;
+
+        function readFilePath(p){
+          return new Promise(async (resolve,reject)=>{
+            console.log('path:', p);
+            let r = await files[p].async('text')
+            resolve(r);
+          });
+        }
+
+        // load all the files 
+        let allFiles = {};
+        for(let filepath of Object.keys(files)){
+          let file = files[filepath];
+          if(file.dir){
+
+          } else {
+            // console.log('filepath:', filepath);
+            let contents = await readFilePath(filepath);
+            // console.log('contents:', contents);
+            let normalizedPath = filepath.split('/').splice(1).join('/');
+            allFiles[normalizedPath] = contents;
+          }
+        }
+
+        console.log('allFiles from Zip:', allFiles);
+        
+        function addChildren(id){
+          return new Promise(async (resolve,reject)=>{
+
+            let nodes = [];
+
+            for(let filepath of Object.keys(allFiles)){
+              let contents = allFiles[filepath];
+              if(filepath.indexOf('nodes/') !== 0){
+                // console.log('NOT NODE:', filepath);
+                continue;
+              }
+
+              let parsed = jsonParse(filepath, contents);
+              if(parsed.nodeId == id){
+                // console.log('Matches ID:', parsed.nodeId, id);
+                let children = await addChildren(parsed._id);
+                parsed.nodes = children;
+                nodes.push(parsed);
+              } else {
+                // console.log('No Kids:', id, parsed.nodeId);
+              }
+
+            }
+
+            resolve(nodes);
+
+          });
+        }
+
+        // re-organize child nodes 
+        ZipNodes = await addChildren(null); // start at root, adds children recursively 
+
+        let secondJson = JSON.parse(allFiles['second.json']);
+        // let basicKey = secondJson.name; 
+
+        console.log('ZipNodes:', ZipNodes);
+
+        // Add app to localApps list (for relaunching after a page refresh) 
+
+        let localAppsList = this.state.localAppsList;
+
+        let newStorageKey = 'seconddb-' + uuidv4();
+
+        let name = window.prompt('name for display', secondJson.name);
+        if(!name){
+          return false;
+        }
+
+        localAppsList.push({
+          name,
+          storageKey: newStorageKey,
+          // basicKey: basicKey,
+          createdAt: (new Date()).getTime()
+        });
+
+        localforage.setItem(SECOND_LIST_OF_LOCAL_APPS, localAppsList).then(()=>{
+          // localStorage.setItem('latest-storage-update',JSON.stringify((new Date()).getTime()));
+
+          console.log('Added app to list');
+          this.setState({
+            // useLocalforage: true
+            useLocalZip: true
+          },()=>{
+            this.handleLoadApp(newStorageKey);
+          });
+
+        });
+
+
+
+
+      // });
+
+    })
+
+    // JSZipUtils.getBinaryContent('https://codeload.github.com/secondai/bundle_browser_user/legacy.zip/master', function(err, data) {
+    //     if(err) {
+    //         throw err; // or handle err
+    //     }
+
+    //     JSZip.loadAsync(data).then(function () {
+    //         // ...
+    //         console.log('loaded zip daata!');
+    //     });
+    // });
+
+
+  }
+
+  @autobind
   handleRemoveExisting(localApp){
 
     let localAppsList = lodash.filter(this.state.localAppsList,app=>{
@@ -1443,8 +1729,13 @@ class App extends Component {
                 <div className="column">
 
                   <h2 className="title is-4">
-                    Use Existing Second 
+                    Previously Created Second
                   </h2>
+
+                  <h2 className="title is-6">
+                    from LocalStorage
+                  </h2>
+
                   <div>
 
                     {
@@ -1476,8 +1767,38 @@ class App extends Component {
 
                 <div className="column">
 
+
                   <h2 className="title is-4">
-                    New Second from LocalStorage
+                    New Second
+                  </h2>
+
+                  <h2 className="title is-6">
+                    Remote Zip File
+                  </h2>
+                  <h2 className="subtitle is-6">
+                    github links parsed automatically
+                  </h2>
+                  
+
+                  <div>
+
+                    <div className="field has-addons">
+                      <div className="control is-expanded">
+                        <input className="input" type="text" placeholder="https zip url" value={this.state.startupZipUrl} onChange={e=>this.setState({startupZipUrl:e.target.value})} />
+                      </div>
+                      <div className="control">
+                        <a className="button is-info" onClick={this.handleCreateNewSecondFromRemoteZip}>
+                          Launch
+                        </a>
+                      </div>
+                    </div>
+
+                  </div>
+
+                  <br />
+
+                  <h2 className="title is-6">
+                    LocalStorage
                   </h2>
                   <div>
 
@@ -1486,21 +1807,27 @@ class App extends Component {
                         <div key={poss}>
 
                           <a onClick={e=>this.handleCreateNewSecondFromLocalStorage(poss)}>
-                            {poss}
+                            - {poss}
                           </a>
 
                         </div>
                       ))
                     }
+                    {
+                      Object.keys(storedAppsList).length ? '':
+                      <div>
+                        <i>
+                          None
+                        </i>
+                      </div>
+                    }
 
                   </div>
 
-                </div>
+                  <br />
 
-                <div className="column">
-
-                  <h2 className="title is-4">
-                    New Second From Disk
+                  <h2 className="title is-6">
+                    Disk
                   </h2>
                   <div>
 
@@ -1508,7 +1835,7 @@ class App extends Component {
                       possibleSeconds.map(poss=>(
                         <div key={poss}>
                           <a onClick={e=>this.handleCreateNewSecond(poss)}>
-                            {poss}
+                            - {poss}
                           </a>
                         </div>
                       ))
@@ -1517,6 +1844,7 @@ class App extends Component {
                   </div>
 
                 </div>
+
               </div>
 
 
@@ -1541,5 +1869,16 @@ App.childContextTypes = {
   Second: PropTypes.any
 }
 
+
+let __parsedFiles = {};
+function jsonParse(key, contents){
+  if(__parsedFiles[key]){
+    return __parsedFiles[key]
+  }
+
+  __parsedFiles[key] = JSON.parse(contents);
+  return __parsedFiles[key];
+
+}
 
 export default App;

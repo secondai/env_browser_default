@@ -6639,6 +6639,8 @@ body {
   .full-screen > * {
     flex: 0 0 auto;
     overflow: scroll; }
+  .full-screen > .flex-header {
+    overflow: visible; }
   .full-screen > .flex-header,
   .full-screen > .flex-footer {
     height: 50px;
@@ -6661,6 +6663,10 @@ body {
       background: #eee; }
     .full-screen > .flex-main > .flex-middle {
       flex: 1 1 auto; }
+
+.editing-phrase-holder .word-in-phrase {
+  font-size: 18px;
+  display: inline; }
 
 .fill-height-or-more {
   min-height: 100%;
