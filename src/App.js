@@ -349,6 +349,10 @@ class App extends Component {
   }
 
   componentDidMount(){
+    console.log('componentDidMount');
+
+    this.loadLocalApps();
+
     // listen for storage changes
     $(window).on('storage', this.receivedMessage);
 
@@ -362,8 +366,6 @@ class App extends Component {
     //     this.startSecond();
     //   })
     // }
-
-    this.loadLocalApps();
 
   }
 
@@ -381,6 +383,7 @@ class App extends Component {
     // apps stored in memory by a Second 
     localforage.getItem('possible-ui-apps')
     .then(storedAppsList=>{
+      console.log('found possible-ui-apps');
       storedAppsList = storedAppsList || {};
       this.setState({
         storedAppsList
@@ -390,6 +393,7 @@ class App extends Component {
     // beginning github url 
     localforage.getItem('last-startup-zip-url')
     .then(startupZipUrl=>{
+      console.log('found startupZipUrl:', startupZipUrl);
       startupZipUrl = startupZipUrl || '';
       this.setState({
         startupZipUrl
