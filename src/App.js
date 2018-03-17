@@ -339,7 +339,7 @@ class App extends Component {
       useLocalforage: false,
       useLocalZip: false,
       nodesDb: [], // empty at first, will load from indexDb (localForage) 
-      startupZipUrl: process.env.REACT_APP_STARTUP_GITHUB_BUNDLE || ''
+      startupZipUrl: process.env.REACT_APP_STARTUP_GITHUB_BUNDLE || 'https://github.com/secondai/bundle_browser_user'
     }
 
   }
