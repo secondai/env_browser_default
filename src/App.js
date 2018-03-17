@@ -69,6 +69,23 @@ import 'brace/ext/searchbox';
 import GitHub from 'github-api';
 
 
+let baseChainUrl = 'https://api.getasecond.com';
+// let baseChainUrl = 'http://localhost:7011';
+
+// OrbitDB uses Pubsub which is an experimental feature
+// and need to be turned on manually. 
+// Note that these options need to be passed to IPFS in 
+// all examples in this document even if not specfied so.
+// const ipfsOptions = {}
+
+// const IPFS = require('ipfs')
+// // const OrbitDB = require('orbit-db')
+// const ipfs = new IPFS(ipfsOptions)
+const ipfs = new window.Ipfs(); // using script tag for now
+// window.ipfs = ipfs;
+
+
+
 const USE_OLD_START = false;
 const NEW_MEMORY_ON_REFRESH = true;
 const SECOND_NODES_DB_KEY = 'second_v1.0.0-10';
@@ -95,6 +112,8 @@ const annyang = require('annyang');
 var getDirName = require('path').dirname;
 const rsa = require('node-rsa');
 var jsSchema = require('js-schema');
+
+let cJSON = require('circular-json');
 
 var EventEmitter = require('eventemitter3');
 var EE = new EventEmitter();
@@ -139,6 +158,14 @@ var createReactClass = require('create-react-class');
 var vm = require('vm-browserify');
 var SHA1 = require("crypto-js/sha1");
 var SHA256 = require("crypto-js/sha256");
+
+const multihash = require('multihashes')
+var StellarSdk = require('stellar-sdk');
+let crypto = require('crypto');
+// var SHA256 = require("crypto-js/sha256");
+// window.sha256 = SHA256;
+// var jsSHA256 = require('js-sha256').sha256;
+
 
 // temporary location for code for incoming_from_universe:0.0.1:local:298fj293
 const CODENODE = {
@@ -378,28 +405,30 @@ class App extends Component {
         console.log('Learning basics2');
         await this.learnBasics();
 
-        // Get ExternalIdentity Node for next request 
-        // - storing internally, then removing and re-adding in the "learn" step 
-        let nodes = await this.fetchNodes({
-          type: 'external_identity:0.0.1:local:8982f982j92'
-        });
+        // // Get ExternalIdentity Node for next request 
+        // // - storing internally, then removing and re-adding in the "learn" step 
+        // let nodes = await this.fetchNodes({
+        //   type: 'external_identity:0.0.1:local:8982f982j92'
+        // });
 
-        let startupExternalIdentityNode;
+        // let startupExternalIdentityNode;
 
-        // NOT required to have a startup node (asks for "words"!) 
-        if(nodes.length){
-          startupExternalIdentityNode = nodes[0];
-          // console.error('Missing ExternalIdentity on startup!');
-          // return false;
-        }
+        // // NOT required to have a startup node (asks for "words"!) 
+        // if(nodes.length){
+        //   startupExternalIdentityNode = nodes[0];
+        //   // console.error('Missing ExternalIdentity on startup!');
+        //   // return false;
+        // }
 
-        // run "first" action
-        let firstResponse = await this.runRequest({
-          type: 'incoming_first:0.1.1:local:78882h37',
-          data: startupExternalIdentityNode
-        }, true)
+        // // run "first" action
+        // // - in theory this is for seeding/setup 
+        // // - we want a UI for setup tho, so kinda skipping this now 
+        // let firstResponse = await this.runRequest({
+        //   type: 'incoming_first:0.1.1:local:78882h37',
+        //   data: startupExternalIdentityNode
+        // }, true)
 
-        console.log('firstResponse', firstResponse);
+        // console.log('firstResponse', firstResponse);
 
       }
 
@@ -408,7 +437,7 @@ class App extends Component {
 
       // init 
       this.runRequest({
-        type: 'browser_startup:0.0.1:local:8831167ssd', // loads the initial react component (MainComponent) 
+        type: 'browser_startup:0.0.1:local:8831167ssd', // loads the initial react component (MainComponent or SetupComponent) 
         data: null
       })
       .then(response=>{
@@ -574,6 +603,7 @@ class App extends Component {
 
         // fetch and run code, pass in 
         let nodes = await this.fetchNodes({
+          nodeId: null, // get top-level only! 
           type: 'incoming_from_universe:0.0.1:local:298fj293'
         });
 
@@ -652,6 +682,7 @@ class App extends Component {
     let universe = {
       // React, // React.Component is available 
       $,
+      fetch: window.fetch.bind(window),
       localStorage,
       alert,
       console,
@@ -659,6 +690,9 @@ class App extends Component {
       jsSchema,
       SHA1,
       SHA256,
+      crypto,
+      multihash, 
+      StellarSdk, 
       createReactClass,
       ReactRouterDomRouter,
       ReactRouterDomRoute,
@@ -686,7 +720,28 @@ class App extends Component {
       uuidv4,
       bitcoin,
       bigi,
-      cJSON: require('circular-json'),
+      parseGitHubUrl,
+      JSZip,
+      ipfs: { // temporary placeholder for reading ipfs file nodes 
+        files: {
+          cat: (hash)=>{
+            // currently fetching from ipfs.io 
+            return new Promise((resolve,reject)=>{
+              let response = $.ajax({
+                url: `https://ipfs.io/ipfs/${hash}`,
+                success: response=>{
+                  resolve(response);
+                },
+                error: err=>{
+                  console.error('Failed fetching from ipfs.io:', hash);
+                  reject();
+                }
+              })
+            });
+          }
+        }
+      },
+      cJSON,
       setTimeout: (func, ms)=>{
         return new Promise((resolve,reject)=>{
           window.setTimeout(()=>{
@@ -698,6 +753,137 @@ class App extends Component {
         })
       },
       EE, // instance of EventEmitter
+      findOnNodeChain: (opts)=>{
+        return new Promise(async (resolve,reject)=>{
+          
+          let {
+            method,
+            nested,
+            searches // only for method=latestForEach
+          } = opts;
+          console.log('Find from NodeChain API');
+
+          // 'one' or 'many' or 'latestForEach'
+          method = method || 'one';
+
+          let data = JSON.parse(`{"operationName":null,"variables":{"nested":null},"query":"query ($nested: JSON) {  viewer { node { ${method}(filter: {nested: $nested}) {    _id    ref    author    version    type    data    __typename  }}}}"}`);
+          data.variables.nested = nested;
+
+          // fetching most recent for a match (_in?) 
+          if(method != 'latestForEach'){
+
+
+            universe.$.ajax({
+              url: `${baseChainUrl}/graphql`,
+              method: 'post',
+              contentType: 'application/json',
+              data: JSON.stringify(data),
+              success: nodeChainResult=>{
+                console.log('NodeChain Result', nodeChainResult);
+                if(!nodeChainResult.data.viewer.node[method]){
+                  console.error('Unable to find node');
+                  return reject();
+                }
+
+                return resolve(nodeChainResult.data.viewer.node[method]);
+
+              },
+              error: err=>{
+                console.error('Failed fetching NodeChain data:', err);
+                return reject();
+              }
+            })
+
+            return;
+
+          }
+
+
+          // latestForEach (search) 
+
+          universe.$.ajax({
+            url: `${baseChainUrl}/nodes/find`,
+            method: 'post',
+            contentType: 'application/json',
+            data: JSON.stringify({
+              searches
+            }),
+            success: nodeChainResults=>{
+              console.log('find latestForEach nodeChainResults', nodeChainResults);
+              return resolve(nodeChainResults);
+
+            },
+            error: err=>{
+              console.error('Failed fetching NodeChain data:', err);
+              return reject();
+            }
+          })
+
+        });
+        
+      },
+      publishToNodeChain: (opts)=>{
+        return new Promise(async (resolve,reject)=>{
+
+          let {
+            nodeInputStr,
+            privateKey,
+            chainPubKey,
+            ref,
+            version,
+            nonce
+          } = opts;
+          console.log('publishToNodeChain opts:', opts);
+
+          let vals = await ipfs.files.add(new Buffer(nodeInputStr,'utf8'));
+          let ipfsHash = vals[0].hash;
+          var key = new rsa(privateKey);
+          let pubKey = key.exportKey('public');
+
+          version = version.toString();
+
+          // ipfsHash + sha256(pubKey) + version + nonce
+          let strToSign = [
+            ipfsHash, 
+            // SHA256(this.state.pubKey).toString(),
+            pubKey,
+            // btoa(this.state.pubKey),
+            chainPubKey, 
+            ref,
+            version,
+            nonce
+          ];
+          console.log('arrToSign', strToSign);
+          strToSign = strToSign.join('');
+          let signature = key.sign(strToSign,'hex');
+
+
+          let data = {
+            nodeInputStr,
+            pubKey,
+            ref,
+            version,
+            nonce,
+            signature,
+          }
+
+          $.ajax({
+            method: 'POST',
+            url: `${baseChainUrl}/nodes/add`,
+            data: JSON.stringify(data),
+            contentType: 'application/json',
+            success: response=>{
+              resolve(response);
+            },
+            error: err=>{
+              console.error('Err from remote:', err);
+              reject(err);
+            }
+          })
+
+
+        });
+      },
       directToSecond: (opts)=>{
         // to an External second
         return new Promise(async (resolve, reject)=>{
@@ -891,6 +1077,13 @@ class App extends Component {
       },
       getIdentityForAddress: (address)=>{
         return new Promise(async (resolve, reject)=>{
+          // Uses default NodeChain API to find first block matching that Identity 
+
+          
+          console.log('GET IDENTITY FOR ADDRESS');
+          alert('using lang.second.ngrok.io here34987239');
+          
+          // OLD ---- 
           // fetches 1st bitcoin transaction for wallet address 
           // - uses decoded first transaction as an IPFS link 
           // - link: https://github.com/ipfs/js-ipfs/tree/master/examples/ipfs-101
@@ -1011,6 +1204,36 @@ class App extends Component {
         });
 
       },
+      reinitBrowser:()=>{
+
+        // init 
+        this.startSecond();
+
+        // this.runRequest({
+        //   type: 'browser_startup:0.0.1:local:8831167ssd', // loads the initial react component (MainComponent or SetupComponent) 
+        //   data: null
+        // })
+        // .then(response=>{
+        //   console.log('Response from browser_startup:', response);
+        //   if(response.type == 'react_component:0.0.1:local:98912hd89'){
+        //     this.setState({
+        //       startupNode: response.data
+        //     })
+        //   } else {
+        //     // Display error output 
+        //     try {
+        //       this.setState({
+        //         startupNode: newErrorOutput(response.data.err.message)
+        //       })
+        //     }catch(err){
+        //       console.error('Invalid error output received');
+        //       this.setState({
+        //         startupNode: newErrorOutput(response)
+        //       })
+        //     }
+        //   }
+        // })
+      },
       newNode: this.insertNode,
       updateNode: this.updateNode,
       clearMemory: ()=>{
@@ -1053,7 +1276,7 @@ class App extends Component {
 
           Promise.resolve(nodes)
           .then(nodes=>{
-            resolve(nodes);
+            resolve(cJSON.parse(cJSON.stringify(nodes)));
             let searchEnd = (new Date()).getTime();
             window.searchTime += (searchEnd - searchStart);
             console.log('searchTime:', window.searchTime, (searchEnd - searchStart));
@@ -1366,7 +1589,7 @@ class App extends Component {
       internalNode.nodeId = updateNode.hasOwnProperty('nodeId') ? updateNode.nodeId : internalNode.nodeId;
       internalNode.type = updateNode.hasOwnProperty('type') ? updateNode.type : internalNode.type;
       internalNode.data = updateNode.hasOwnProperty('data') ? updateNode.data : internalNode.data;
-      internalNode.updatedAt = updateNode.hasOwnProperty('updatedAt') ? updateNode.updatedAt : internalNode.updatedAt;
+      internalNode.updatedAt = updateNode.hasOwnProperty('updatedAt') ? (updateNode.updatedAt || (new Date()).getTime()) : internalNode.updatedAt;
 
       // changes were by reference? 
 
@@ -1700,7 +1923,7 @@ class App extends Component {
   render() {
 
 
-    let possibleSeconds = Object.keys(BASIC_NODES);
+    let possibleSeconds = []; //Object.keys(BASIC_NODES);
     let localApps = lodash.sortBy(this.state.localAppsList || [],'createdAt').reverse();
     let storedAppsList = this.state.storedAppsList;
 
@@ -1715,7 +1938,7 @@ class App extends Component {
                   Second
                 </h1>
                 <h2 className="subtitle">
-                  Developer Browser App Startup
+                  Browser App Startup
                 </h2>
               </div>
             </div>

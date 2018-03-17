@@ -18,6 +18,7 @@ const withEditManager = (WrappedComponent, opts) => {
       opts.lockFieldsAfterEdit = true;
 
       opts.fieldCompareFunc = opts.fieldCompareFunc || {};
+      opts.fieldOutputFunc = opts.fieldOutputFunc || {};
       // (previous, next)=>{
       //   return JSON.stringify(previous) === JSON.stringify(next);
       // }
@@ -220,6 +221,32 @@ const withEditManager = (WrappedComponent, opts) => {
 
     }
 
+    @autobind
+    toObj(){
+
+      // console.log('toObj');
+
+      try {
+        let fields = JSON.parse(JSON.stringify(this.state.fields));
+        let baseData = JSON.parse(JSON.stringify(this.props[this.state.opts.editProp]));
+
+        Object.keys(fields).map(fieldKey=>{
+          if(this.state.opts.fieldOutputFunc && this.state.opts.fieldOutputFunc[fieldKey]){
+            baseData[fieldKey] = this.state.opts.fieldOutputFunc[fieldKey](fields[fieldKey].value);
+          } else {
+            baseData[fieldKey] = fields[fieldKey].value;
+          }
+        })
+        return baseData;
+
+      }catch(err){
+        console.error('Failed in toObj', err);
+        return this.props[this.state.opts.editProp];
+      }
+
+
+    }
+
     render() {
       // const { auth, updateAuth } = this.context
 
@@ -235,6 +262,7 @@ const withEditManager = (WrappedComponent, opts) => {
       } else {
         customProps['editState'] = this.state;
       }
+      customProps['editStateToObj'] = this.toObj;
 
 
       return (
