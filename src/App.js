@@ -68,6 +68,7 @@ import 'brace/ext/searchbox';
 
 import GitHub from 'github-api';
 
+window.localforage = localforage;
 
 let baseChainUrl = 'https://api.getasecond.com';
 // let baseChainUrl = 'http://localhost:7011';
@@ -1968,44 +1969,6 @@ class App extends Component {
             <div className="container">
 
               <div className="columns">
-                <div className="column">
-
-                  <h2 className="title is-4">
-                    Previously Created Second
-                  </h2>
-
-                  <h2 className="title is-6">
-                    from LocalStorage
-                  </h2>
-
-                  <div>
-
-                    {
-                      localApps.map(localApp=>(
-                        <div key={localApp.storageKey}>
-                          <a onClick={e=>this.handleUseExisting(localApp)}>
-                            {localApp.name || localApp.basicKey}
-                            {
-                              window.name != localApp.storageKey ? '':
-                              <span>
-                              &nbsp; <strong>[last used in tab]</strong>
-                              </span>
-                            }
-                          </a>
-                          &nbsp;
-                          &nbsp;
-                          &nbsp;
-                          <span onClick={e=>this.handleRemoveExisting(localApp)} style={{cursor:'pointer'}}>
-                            x
-                          </span>
-
-                        </div>
-                      ))
-                    }
-
-                  </div>
-
-                </div>
 
                 <div className="column">
 
@@ -2079,6 +2042,45 @@ class App extends Component {
                           <a onClick={e=>this.handleCreateNewSecond(poss)}>
                             - {poss}
                           </a>
+                        </div>
+                      ))
+                    }
+
+                  </div>
+
+                </div>
+                
+                <div className="column">
+
+                  <h2 className="title is-4">
+                    Previously Created Second
+                  </h2>
+
+                  <h2 className="title is-6">
+                    from LocalStorage
+                  </h2>
+
+                  <div>
+
+                    {
+                      localApps.map(localApp=>(
+                        <div key={localApp.storageKey}>
+                          <a onClick={e=>this.handleUseExisting(localApp)}>
+                            {localApp.name || localApp.basicKey}
+                            {
+                              window.name != localApp.storageKey ? '':
+                              <span>
+                              &nbsp; <strong>[last used in tab]</strong>
+                              </span>
+                            }
+                          </a>
+                          &nbsp;
+                          &nbsp;
+                          &nbsp;
+                          <span onClick={e=>this.handleRemoveExisting(localApp)} style={{cursor:'pointer'}}>
+                            x
+                          </span>
+
                         </div>
                       ))
                     }
