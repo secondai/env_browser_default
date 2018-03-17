@@ -327,6 +327,13 @@ class App extends Component {
       this.secondReadyResolve = resolve;
     });
 
+    let startupZipUrl = '';
+    if(process.env.REACT_APP_STARTUP_GITHUB_BUNDLE && process.env.REACT_APP_STARTUP_GITHUB_BUNDLE.length){
+      startupZipUrl = process.env.REACT_APP_STARTUP_GITHUB_BUNDLE;
+    } else {
+      startupZipUrl = localStorage.getItem('lastStartupZipUrl') || '';
+    }
+
     this.state = {
       // user: user
       capabilities: null, // turns into a function, or is a list of current capabilities?  (Load, then Use capability?)
@@ -339,7 +346,7 @@ class App extends Component {
       useLocalforage: false,
       useLocalZip: false,
       nodesDb: [], // empty at first, will load from indexDb (localForage) 
-      startupZipUrl: process.env.REACT_APP_STARTUP_GITHUB_BUNDLE || (localStorage.getItem('lastStartupZipUrl') || '')
+      startupZipUrl
     }
 
   }
