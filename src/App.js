@@ -339,7 +339,7 @@ class App extends Component {
       useLocalforage: false,
       useLocalZip: false,
       nodesDb: [], // empty at first, will load from indexDb (localForage) 
-      startupZipUrl: process.env.REACT_APP_STARTUP_GITHUB_BUNDLE || 'https://github.com/secondai/bundle_browser_user'
+      startupZipUrl: process.env.REACT_APP_STARTUP_GITHUB_BUNDLE || (localStorage.getItem('lastStartupZipUrl') || '')
     }
 
   }
@@ -1709,6 +1709,8 @@ class App extends Component {
     // - downloads and extracts a zip file, or gets the nodes individually? 
 
     console.log('startupZipUrl1:', this.state.startupZipUrl);
+
+    localStorage.setItem('lastStartupZipUrl', this.state.startupZipUrl)
 
     // converts startup git url into username/password 
     // - eventually allow links to be pasted, parse accordingly 
