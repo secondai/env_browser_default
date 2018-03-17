@@ -327,13 +327,6 @@ class App extends Component {
       this.secondReadyResolve = resolve;
     });
 
-    let startupZipUrl = '';
-    if(process.env.REACT_APP_STARTUP_GITHUB_BUNDLE && process.env.REACT_APP_STARTUP_GITHUB_BUNDLE.length){
-      startupZipUrl = process.env.REACT_APP_STARTUP_GITHUB_BUNDLE;
-    } else {
-      startupZipUrl = localStorage.getItem('lastStartupZipUrl') || '';
-    }
-
     this.state = {
       // user: user
       capabilities: null, // turns into a function, or is a list of current capabilities?  (Load, then Use capability?)
@@ -346,7 +339,7 @@ class App extends Component {
       useLocalforage: false,
       useLocalZip: false,
       nodesDb: [], // empty at first, will load from indexDb (localForage) 
-      startupZipUrl
+      startupZipUrl: ''
     }
 
   }
@@ -391,6 +384,15 @@ class App extends Component {
       storedAppsList = storedAppsList || {};
       this.setState({
         storedAppsList
+      })
+    })
+
+    // beginning github url 
+    localforage.getItem('last-startup-zip-url')
+    .then(startupZipUrl=>{
+      startupZipUrl = startupZipUrl || '';
+      this.setState({
+        startupZipUrl
       })
     })
 
@@ -1717,7 +1719,12 @@ class App extends Component {
 
     console.log('startupZipUrl1:', this.state.startupZipUrl);
 
-    localStorage.setItem('lastStartupZipUrl', this.state.startupZipUrl)
+    localforage.setItem('last-startup-zip-url', this.state.startupZipUrl)
+    .then(()=>{
+      console.log('set last-startup-zip-url', this.state.startupZipUrl);
+    });
+      // localStorage.setItem('latest-storage-update',JSON.stringify((new Date()).getTime()));
+
 
     // converts startup git url into username/password 
     // - eventually allow links to be pasted, parse accordingly 
