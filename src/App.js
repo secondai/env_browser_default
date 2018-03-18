@@ -340,6 +340,7 @@ class App extends Component {
       useLocalforage: false,
       useLocalZip: false,
       nodesDb: [], // empty at first, will load from indexDb (localForage) 
+      startupName: '',
       startupZipUrl: ''
     }
 
@@ -695,6 +696,7 @@ class App extends Component {
 
     let universe = {
       // React, // React.Component is available 
+      env: process.env, // REACT_APP...
       $,
       fetch: window.fetch.bind(window),
       localStorage,
@@ -1730,15 +1732,43 @@ class App extends Component {
     });
       // localStorage.setItem('latest-storage-update',JSON.stringify((new Date()).getTime()));
 
+    this.setState({
+      launching: true
+    });
+
+    let url = this.state.startupZipUrl;
+
+    let gh = parseGitHubUrl(url);
+
+
+    // If no name, fetch the name first 
+    let startupName = this.state.startupName;
+    if(!startupName || !startupName.length){
+
+      let GH = new GitHub();
+      let ghr = GH.getRepo(gh.owner, gh.name);
+      ghr.getContents(gh.branch,'second.json',false,(err,val)=>{
+        if(err){
+          alert('Failed finding valid second.json');
+          return false;
+        }
+        let secondJson = JSON.parse(atob(val.content));
+        console.log('secondjson:', secondJson);
+        this.setState({
+          startupName: secondJson.name || '',
+          launching: false
+        });
+      })
+
+
+      return false;
+    }
 
     // converts startup git url into username/password 
     // - eventually allow links to be pasted, parse accordingly 
 
     // parse github links and re-organize to fit .zip model 
 
-    let url = this.state.startupZipUrl;
-
-    let gh = parseGitHubUrl(url);
     if(gh.owner && 
       gh.name && 
       gh.repo && 
@@ -1831,8 +1861,8 @@ class App extends Component {
 
         let newStorageKey = 'seconddb-' + uuidv4();
 
-        let name = window.prompt('name for display', secondJson.name);
-        if(!name){
+        let name = this.state.startupName; //window.prompt('name for display', secondJson.name);
+        if(!name || !name.length){
           return false;
         }
 
@@ -1977,6 +2007,15 @@ class App extends Component {
                     New Second
                   </h2>
 
+
+                  <div className="field has-addons">
+                    <div className="control is-expanded">
+                      <input className="input" type="text" placeholder="app name" value={this.state.startupName} onChange={e=>this.setState({startupName:e.target.value})} />
+                    </div>
+                  </div>
+
+                  <br />
+
                   <h2 className="title is-6">
                     Remote Zip File
                   </h2>
@@ -1992,8 +2031,13 @@ class App extends Component {
                         <input className="input" type="text" placeholder="https zip url" value={this.state.startupZipUrl} onChange={e=>this.setState({startupZipUrl:e.target.value})} />
                       </div>
                       <div className="control">
-                        <a className="button is-info" onClick={this.handleCreateNewSecondFromRemoteZip}>
-                          Launch
+                        <a className={"button is-info" + (this.state.launching ? ' is-loading':'')} onClick={this.handleCreateNewSecondFromRemoteZip}>
+                          {
+                            this.state.startupName.length ?
+                            'Launch'
+                            :
+                            'Fetch'
+                          }
                         </a>
                       </div>
                     </div>
@@ -2049,7 +2093,7 @@ class App extends Component {
                   </div>
 
                 </div>
-                
+
                 <div className="column">
 
                   <h2 className="title is-4">
