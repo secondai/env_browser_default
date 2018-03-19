@@ -786,54 +786,86 @@ class App extends Component {
           data.variables.nested = nested;
 
           // fetching most recent for a match (_in?) 
-          if(method != 'latestForEach'){
+          switch(method){
+            case 'one':
+            case 'many':
 
+              universe.$.ajax({
+                url: `${baseChainUrl}/graphql`,
+                method: 'post',
+                contentType: 'application/json',
+                data: JSON.stringify(data),
+                success: nodeChainResult=>{
+                  console.log('NodeChain Result', nodeChainResult);
+                  if(!nodeChainResult.data.viewer.node[method]){
+                    console.error('Unable to find node');
+                    return reject();
+                  }
 
-            universe.$.ajax({
-              url: `${baseChainUrl}/graphql`,
-              method: 'post',
-              contentType: 'application/json',
-              data: JSON.stringify(data),
-              success: nodeChainResult=>{
-                console.log('NodeChain Result', nodeChainResult);
-                if(!nodeChainResult.data.viewer.node[method]){
-                  console.error('Unable to find node');
+                  return resolve(nodeChainResult.data.viewer.node[method]);
+
+                },
+                error: err=>{
+                  console.error('Failed fetching NodeChain data:', err);
                   return reject();
                 }
+              })
 
-                return resolve(nodeChainResult.data.viewer.node[method]);
+              return;
 
-              },
-              error: err=>{
-                console.error('Failed fetching NodeChain data:', err);
-                return reject();
-              }
-            })
+            case 'latestForEach':
+              // latestForEach (search) 
 
-            return;
+              universe.$.ajax({
+                url: `${baseChainUrl}/nodes/find`,
+                method: 'post',
+                contentType: 'application/json',
+                data: JSON.stringify({
+                  searches
+                }),
+                success: nodeChainResults=>{
+                  console.log('find latestForEach nodeChainResults', nodeChainResults);
+                  return resolve(nodeChainResults);
+
+                },
+                error: err=>{
+                  console.error('Failed fetching NodeChain data:', err);
+                  return reject();
+                }
+              })
+
+              return;
+
+            case 'types':
+              // types (TODO: filter) 
+
+              universe.$.ajax({
+                url: `${baseChainUrl}/nodes/types`,
+                // url: `http://localhost:7011/nodes/types`,
+                method: 'post',
+                contentType: 'application/json',
+                data: JSON.stringify({}),
+                success: nodeChainResults=>{
+                  console.log('find types nodeChainResults', nodeChainResults);
+                  return resolve(nodeChainResults);
+
+                },
+                error: err=>{
+                  console.error('Failed fetching NodeChain data:', err);
+                  return reject();
+                }
+              })
+
+              return;
+
+
+            default:
+              console.error('invalid type');
+              break;
 
           }
 
 
-          // latestForEach (search) 
-
-          universe.$.ajax({
-            url: `${baseChainUrl}/nodes/find`,
-            method: 'post',
-            contentType: 'application/json',
-            data: JSON.stringify({
-              searches
-            }),
-            success: nodeChainResults=>{
-              console.log('find latestForEach nodeChainResults', nodeChainResults);
-              return resolve(nodeChainResults);
-
-            },
-            error: err=>{
-              console.error('Failed fetching NodeChain data:', err);
-              return reject();
-            }
-          })
 
         });
         
@@ -1190,7 +1222,13 @@ class App extends Component {
 
           // should validate code/schema too? 
 
-          let code = opts.codeNode.data.code;
+          let code;
+          try {
+            code = opts.codeNode.data.code;
+          }catch(err){
+            console.error('Missing code for runNodeCodeInVM!', opts);
+            return false;
+          }
 
           let datetime = (new Date());
 
@@ -1974,7 +2012,8 @@ class App extends Component {
   render() {
 
 
-    let possibleSeconds = []; //Object.keys(BASIC_NODES);
+    let possibleSeconds = []; // Object.keys(BASIC_NODES);
+    // let possibleSeconds = Object.keys(BASIC_NODES);
     let localApps = lodash.sortBy(this.state.localAppsList || [],'createdAt').reverse();
     let storedAppsList = this.state.storedAppsList;
 
