@@ -1123,14 +1123,93 @@ class App extends Component {
 
         })
       },
-      getIdentityForAddress: (address)=>{
+      getSecondForUsername: (username, serverInfo)=>{
+        return new Promise(async (resolve,reject)=>{
+
+          serverInfo = Object.assign({
+            address: 'https://horizon-testnet.stellar.org/',
+            network: 'test'
+          }, serverInfo || {});
+
+          let subname = ''; // empty is for root 
+          let usernameSplit = username.split('@');
+          if(usernameSplit.length > 1){
+            subname = usernameSplit[0];
+            username = usernameSplit[1];
+          }
+
+          switch(serverInfo.network){
+            case 'public':
+              StellarSdk.Network.usePublicNetwork();
+              break;
+            case 'test':
+              StellarSdk.Network.useTestNetwork();
+              break;
+            default:
+              break;
+          }
+          
+          let stellarServer = new StellarSdk.Server(serverInfo.address);
+          
+          console.log('stellarServer', stellarServer);
+          
+          let pkTargetSeed = crypto.createHash('sha256').update(username).digest(); //returns a buffer
+          console.log('pkTargetSeed', pkTargetSeed);
+          
+          var pairTarget = StellarSdk.Keypair.fromRawEd25519Seed(pkTargetSeed);
+          
+          console.log('pairTarget', pairTarget);
+          
+          let targetAccount;
+          try {
+            targetAccount = await stellarServer.loadAccount(pairTarget.publicKey())
+            console.log('targetAccount:', targetAccount);
+          }catch(err){
+            console.error('Failed getting targetAccount', err);
+            return reject();
+          }
+          
+                
+          // get the current value of the Second ipfshash 
+          let secondHash = await targetAccount.data({key: subname + '|second'})
+          .then(function(dataValue) {
+            let decoded = atob(dataValue.value);
+            return decoded;
+          })
+          .catch(function (err) {
+            return null;
+          })
+    
+          console.log('secondHash:', secondHash);
+          
+          try {
+            let data = await ipfs.files.cat(secondHash);
+            
+            data = JSON.parse(data);
+            
+            return resolve(data);
+            
+          } catch(err){
+          
+            alert('failed finding hash for username (App.js1)');
+
+            return reject();
+          }
+
+        });
+
+
+      },
+      getIdentityForAddress: (address, serverInfo)=>{
         return new Promise(async (resolve, reject)=>{
+
+
           // Uses default NodeChain API to find first block matching that Identity 
 
           
           console.log('GET IDENTITY FOR ADDRESS');
           alert('using lang.second.ngrok.io here34987239');
-          
+
           // OLD ---- 
           // fetches 1st bitcoin transaction for wallet address 
           // - uses decoded first transaction as an IPFS link 
