@@ -10,7 +10,7 @@
     "app:build": "node scripts/build.js",
     "app:test": "node scripts/test.js --env=jsdom",
     "heroku-postbuild": "npm run app:build",
-    "heroku": "./node_modules/.bin/http-server ./build -p $PORT -f ./build/index.html"
+    "heroku": "./node_modules/.bin/http-server-spa build index.html $PORT"
   },
   "proxy": "http://localhost:7001",
   "dependencies": {
@@ -60,6 +60,7 @@
     "hashcash": "^0.5.1",
     "html-webpack-plugin": "2.29.0",
     "http-server-fallback": "0.8.5",
+    "http-server-spa": "1.2.0",
     "ipfs": "0.28.0",
     "jest": "20.0.4",
     "jquery": "^3.2.1",
