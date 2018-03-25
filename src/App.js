@@ -880,6 +880,7 @@ class App extends Component {
         return new Promise(async (resolve,reject)=>{
 
           let {
+            apiAddress,
             nodeInputStr,
             privateKey,
             chainPubKey,
@@ -887,6 +888,9 @@ class App extends Component {
             version,
             nonce
           } = opts;
+
+          apiAddress = apiAddress || baseChainUrl;
+          
           console.log('publishToNodeChain opts:', opts);
 
           let vals = await ipfs.files.add(new Buffer(nodeInputStr,'utf8'));
@@ -923,7 +927,7 @@ class App extends Component {
 
           $.ajax({
             method: 'POST',
-            url: `${baseChainUrl}/nodes/add`,
+            url: `${apiAddress}/nodes/add`,
             data: JSON.stringify(data),
             contentType: 'application/json',
             success: response=>{
