@@ -775,15 +775,21 @@ class App extends Component {
           let {
             method,
             nested,
-            searches // only for method=latestForEach
+            searches, // only for method=latestForEach
+            chainPubKey,
+            apiAddress
           } = opts;
           console.log('Find from NodeChain API');
+
+          // chainPubKey = ; // default chainPubKey for secondOrg (TODO: remove) 
+          apiAddress = apiAddress || baseChainUrl;
 
           // 'one' or 'many' or 'latestForEach'
           method = method || 'one';
 
-          let data = JSON.parse(`{"operationName":null,"variables":{"nested":null},"query":"query ($nested: JSON) {  viewer { node { ${method}(filter: {nested: $nested}) {    _id    ref    author    version    type    data    __typename  }}}}"}`);
+          let data = JSON.parse(`{"operationName":null,"variables":{"nested":null},"query":"query ($nested: JSON    $chainPubKey: String) {  viewer { node { ${method}(filter: {nested: $nested, chainPubKey: $chainPubKey}) {    _id    ref    author    version    type    data    __typename  }}}}"}`);
           data.variables.nested = nested;
+          data.variables.chainPubKey = chainPubKey;
 
           // fetching most recent for a match (_in?) 
           switch(method){
@@ -791,7 +797,7 @@ class App extends Component {
             case 'many':
 
               universe.$.ajax({
-                url: `${baseChainUrl}/graphql`,
+                url: `${apiAddress}/graphql`,
                 method: 'post',
                 contentType: 'application/json',
                 data: JSON.stringify(data),
@@ -817,7 +823,7 @@ class App extends Component {
               // latestForEach (search) 
 
               universe.$.ajax({
-                url: `${baseChainUrl}/nodes/find`,
+                url: `${apiAddress}/nodes/find`,
                 method: 'post',
                 contentType: 'application/json',
                 data: JSON.stringify({
@@ -840,7 +846,7 @@ class App extends Component {
               // types (TODO: filter) 
 
               universe.$.ajax({
-                url: `${baseChainUrl}/nodes/types`,
+                url: `${apiAddress}/nodes/types`,
                 // url: `http://localhost:7011/nodes/types`,
                 method: 'post',
                 contentType: 'application/json',
@@ -1126,6 +1132,80 @@ class App extends Component {
       getSecondForUsername: (username, serverInfo)=>{
         return new Promise(async (resolve,reject)=>{
 
+          let result = await universe.getNodeForUsernameKey(username, serverInfo, 'second');
+          
+          return resolve(result);
+
+        });
+
+
+      },
+      getNodeForUsernameKey: (username, serverInfo, key)=>{
+        return new Promise(async (resolve,reject)=>{
+
+          let targetAccount = await universe.getAccountForUsername(username, serverInfo);
+
+          let subname = ''; // empty is for root 
+          let usernameSplit = username.split('@');
+          if(usernameSplit.length > 1){
+            subname = usernameSplit[0];
+            username = usernameSplit[1];
+          }
+          
+          // get the current value of the ipfshash for the key 
+          let hash = await targetAccount.data({key: subname + '|' + key})
+          .then(function(dataValue) {
+            let decoded = atob(dataValue.value);
+            return decoded;
+          })
+          .catch(function (err) {
+            return null;
+          })
+    
+          console.log('hash (fetching via ipfs):', hash);
+          
+          try {
+            let data = await universe.ipfs.files.cat(hash);
+            
+            console.log('ipfs file data:', data);
+            data = JSON.parse(data);
+            
+            return resolve(data);
+            
+          } catch(err){
+          
+            // alert('failed finding hash for username (App.js1)');
+            console.error('failed finding hash for username (app.js1)');
+
+            return reject();
+          }
+
+        });
+
+
+      },
+      getAccountForUsername: (username, serverInfo)=>{
+        return new Promise(async (resolve,reject)=>{
+
+          if(lodash.isString(serverInfo)){
+            switch(serverInfo){
+              case 'test':
+                serverInfo = {
+                  address: 'https://horizon-testnet.stellar.org/',
+                  network: 'test'
+                }
+                break;
+              case 'public':
+                serverInfo = {
+                  address: 'https://horizon-testnet.stellar.org/',
+                  network: 'test'
+                }
+                break;
+              default:
+                console.error('Invalid type specified for serverInfo');
+                return false;
+            }
+          }
           serverInfo = Object.assign({
             address: 'https://horizon-testnet.stellar.org/',
             network: 'test'
@@ -1169,32 +1249,7 @@ class App extends Component {
             return reject();
           }
           
-                
-          // get the current value of the Second ipfshash 
-          let secondHash = await targetAccount.data({key: subname + '|second'})
-          .then(function(dataValue) {
-            let decoded = atob(dataValue.value);
-            return decoded;
-          })
-          .catch(function (err) {
-            return null;
-          })
-    
-          console.log('secondHash:', secondHash);
-          
-          try {
-            let data = await ipfs.files.cat(secondHash);
-            
-            data = JSON.parse(data);
-            
-            return resolve(data);
-            
-          } catch(err){
-          
-            alert('failed finding hash for username (App.js1)');
-
-            return reject();
-          }
+          return resolve(targetAccount);
 
         });
 
