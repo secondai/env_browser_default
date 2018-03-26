@@ -827,7 +827,8 @@ class App extends Component {
                 method: 'post',
                 contentType: 'application/json',
                 data: JSON.stringify({
-                  searches
+                  searches,
+                  chainPubKey
                 }),
                 success: nodeChainResults=>{
                   console.log('find latestForEach nodeChainResults', nodeChainResults);
@@ -850,7 +851,9 @@ class App extends Component {
                 // url: `http://localhost:7011/nodes/types`,
                 method: 'post',
                 contentType: 'application/json',
-                data: JSON.stringify({}),
+                data: JSON.stringify({
+                  chainPubKey
+                }),
                 success: nodeChainResults=>{
                   console.log('find types nodeChainResults', nodeChainResults);
                   return resolve(nodeChainResults);
@@ -890,7 +893,7 @@ class App extends Component {
           } = opts;
 
           apiAddress = apiAddress || baseChainUrl;
-          
+
           console.log('publishToNodeChain opts:', opts);
 
           let vals = await ipfs.files.add(new Buffer(nodeInputStr,'utf8'));
