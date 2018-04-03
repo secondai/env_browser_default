@@ -353,7 +353,9 @@ class App extends Component {
   componentDidMount(){
     console.log('componentDidMount');
 
-    this.loadLocalApps();
+    this.loadLocalApps()
+    .then(this.autolaunch);
+
 
     // listen for storage changes
     $(window).on('storage', this.receivedMessage);
@@ -372,36 +374,105 @@ class App extends Component {
   }
 
   @autobind
-  loadLocalApps(){
+  autolaunch(){
+    // launches lastApp automatically 
+    // - after a slight delay in order to skip and go back to the Launcher
+    //   - could also have a global keycode? 
+    //   - or launching a new tab causes the Launcher to display 
 
-    localforage.getItem(SECOND_LIST_OF_LOCAL_APPS)
-    .then(localAppsList=>{
-      localAppsList = localAppsList || [];
-      this.setState({
-        localAppsList
+    let localApps = this.state.localAppsList || [];
+
+    if(window.name){
+
+      let existing = localApps.find(a=>{
+        return a.storageKey == window.name;
+      });
+
+      if(existing){
+        // find app and autolaunch
+        console.log('Starting autolaunch!', window.name, existing);
+
+        this.setState({
+          autolaunching: true,
+          initialLoad: true
+        });
+
+        window.setTimeout(()=>{
+          if(this.state.autolaunching){
+
+            // find app and autolaunch
+            console.log('Launch initiated after no cancel');
+
+
+            this.handleUseExisting(existing);
+            this.setState({
+              autolaunching: false
+            });
+
+          }
+
+        },2000);
+
+
+      }
+
+    }
+
+    this.setState({
+      initialLoad: true
+    });
+
+  }
+
+  @autobind
+  async loadLocalApps(){
+
+    let promises = [];
+
+    promises.push(new Promise((resolve,reject)=>{
+
+      // "running" apps 
+      localforage.getItem(SECOND_LIST_OF_LOCAL_APPS)
+      .then(localAppsList=>{
+        localAppsList = localAppsList || [];
+        this.setState({
+          localAppsList
+        }, resolve)
       })
-    })
 
-    // apps stored in memory by a Second 
-    localforage.getItem('possible-ui-apps')
-    .then(storedAppsList=>{
-      console.log('found possible-ui-apps');
-      storedAppsList = storedAppsList || {};
-      this.setState({
-        storedAppsList
+    }));
+
+
+    promises.push(new Promise((resolve,reject)=>{
+
+      // apps stored in memory by a Second 
+      localforage.getItem('possible-ui-apps')
+      .then(storedAppsList=>{
+        console.log('found possible-ui-apps');
+        storedAppsList = storedAppsList || {};
+        this.setState({
+          storedAppsList
+        },resolve)
       })
-    })
 
-    // beginning github url 
-    localforage.getItem('last-startup-zip-url')
-    .then(startupZipUrl=>{
-      console.log('found startupZipUrl:', startupZipUrl);
-      startupZipUrl = startupZipUrl || '';
-      this.setState({
-        startupZipUrl
+    }));
+
+    promises.push(new Promise((resolve,reject)=>{
+
+      // beginning github url 
+      localforage.getItem('last-startup-zip-url')
+      .then(startupZipUrl=>{
+        console.log('found startupZipUrl:', startupZipUrl);
+        startupZipUrl = startupZipUrl || '';
+        this.setState({
+          startupZipUrl
+        },resolve)
       })
-    })
 
+    }));
+
+
+    await Promise.all(promises);
 
   }
 
@@ -488,6 +559,7 @@ class App extends Component {
 
     return new Promise(async (resolve,reject)=>{
 
+      console.log('learnBasics started');
 
       // console.log('BASICS:', BASIC_NODES);
 
@@ -700,6 +772,7 @@ class App extends Component {
       $,
       fetch: window.fetch.bind(window),
       localStorage,
+      handleCreateNewSecondFromNodes: this.handleCreateNewSecondFromNodes,
       alert,
       console,
       copy, // to clipboard
@@ -2087,6 +2160,48 @@ class App extends Component {
   }
 
   @autobind
+  handleCreateNewSecondFromNodes(name, startNodes){
+
+    // Creates local instance from remote nodes 
+
+    // kill/clear previous (expecting it to exist) 
+    this.secondReady = new Promise(resolve=>{
+      this.secondReadyResolve = resolve;
+    });
+
+    // re-using ZipNodes, doesn't matter exactly 
+    ZipNodes = startNodes;
+
+    let newStorageKey = 'seconddb-' + uuidv4();
+
+    let localAppsList = this.state.localAppsList;
+
+    // Nodes are passed in 
+    localAppsList.push({
+      name,
+      storageKey: newStorageKey,
+      // basicKey: basicKey,
+      createdAt: (new Date()).getTime()
+    });
+
+    localforage.setItem(SECOND_LIST_OF_LOCAL_APPS, localAppsList).then(()=>{
+      // localStorage.setItem('latest-storage-update',JSON.stringify((new Date()).getTime()));
+
+      console.log('Added app to list of local running app instances');
+      this.setState({
+        nodesDb: [], // reset
+        useLocalforage: false, // necessary to cancel out previous result! 
+        useLocalZip: true
+      },()=>{
+        this.handleLoadApp(newStorageKey);
+      });
+
+    });
+
+
+  }
+
+  @autobind
   handleRemoveExisting(localApp){
 
     let localAppsList = lodash.filter(this.state.localAppsList,app=>{
@@ -2157,6 +2272,43 @@ class App extends Component {
     // let possibleSeconds = Object.keys(BASIC_NODES);
     let localApps = lodash.sortBy(this.state.localAppsList || [],'createdAt').reverse();
     let storedAppsList = this.state.storedAppsList;
+
+    if(!this.state.initialLoad){
+      return (
+        <div>
+          <div className="hero is-large">
+            <div className="hero-body">
+              <div className="container has-text-centered">
+                <h1 className="title">
+                  ...
+                </h1>
+              </div>
+            </div>
+          </div>
+        </div>
+      )
+    }
+
+    if(this.state.autolaunching){
+      return (
+        <div>
+          <div className="hero is-large">
+            <div className="hero-body">
+              <div className="container has-text-centered">
+                <h1 className="title is-3">
+                  Launching App
+                </h1>
+                <h2 className="subtitle2">
+                  <button className="button" onClick={e=>this.setState({autolaunching: false})}>
+                    Cancel
+                  </button>
+                </h2>
+              </div>
+            </div>
+          </div>
+        </div>
+      )
+    }
 
     // choosing app to use? 
     if(this.state.choosing){

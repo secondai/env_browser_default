@@ -15,13 +15,16 @@ class state {
 		delete this.subscriptions[handle];
 	}
 
-	setState(obj) {
+	setState(obj, cb) {
 		this.state =  Object.assign({}, this.state, obj);
 		this.subscriptions.forEach((cb) => {
 			if(cb) {
 				cb();
 			}
 		})
+		if(cb){
+			cb();
+		}
 	}
 }
 
