@@ -827,6 +827,37 @@ class App extends Component {
       }
     }
 
+    // app_base and platform_nodes for CodeNode 
+    // - useful to have as "global" values for the request, so we don't have to pass to each loadCapabilities function 
+
+    // console.log('sameAppPlatform');
+    function getParentNodes(node){
+      let nodes = [node];
+      if(node.parent){
+        nodes = nodes.concat(getParentNodes(node.parent));
+      }
+      return nodes;
+    }
+    
+    let parentNodes = getParentNodes(codeNode);
+
+    // console.log('NodeParents2:', node2._id, parentNodes2.length);
+
+    // see if first match of each is correct (aka "outwards" (not from root, but from nodes)) 
+    let platformClosest = lodash.find(parentNodes, node=>{
+      return (
+        node.type.split(':')[0] == 'platform_nodes'
+      )
+    });
+    let appBaseClosest = lodash.find(parentNodes, node=>{
+      return (
+        node.type.split(':')[0] == 'app_base'
+      )
+    });
+
+    // console.log('platformClosest?', platformClosest ? true:false);
+    // console.log('appBaseClosest?', appBaseClosest ? true:false);
+
 
     let universe = {
       // React, // React.Component is available 
@@ -873,6 +904,95 @@ class App extends Component {
       bigi,
       parseGitHubUrl,
       JSZip,
+      isParentOf: (parentId, node1)=>{
+        // console.log('sameAppPlatform');
+        function getParentNodeIds(node){
+          let nodes = [node._id];
+          if(node.parent){
+            nodes = nodes.concat(getParentNodeIds(node.parent));
+          }
+          return nodes;
+        }
+        
+        let parentNodeIds1 = getParentNodeIds(node1);
+        if(parentNodeIds1.indexOf(parentId) !== -1){
+          return true;
+        }
+        return false;
+
+      },
+      sameAppPlatform: (node1, node2)=>{
+        // console.log('sameAppPlatform');
+        function getParentNodes(node){
+          let nodes = [node];
+          if(node.parent){
+            nodes = nodes.concat(getParentNodes(node.parent));
+          }
+          return nodes;
+        }
+        
+        let parentNodes1 = getParentNodes(node1);
+        let parentNodes2 = getParentNodes(node2);
+
+        // console.log('NodeParents2:', node2._id, parentNodes2.length);
+
+        // see if first match of each is correct (aka "outwards" (not from root, but from nodes)) 
+        let platformClosest1 = lodash.find(parentNodes1, node=>{
+          return (
+            node.type.split(':')[0] == 'platform_nodes'
+          )
+        });
+        let appBaseClosest1 = lodash.find(parentNodes1, node=>{
+          return (
+            node.type.split(':')[0] == 'app_base'
+          )
+        });
+
+        let platformClosest2 = lodash.find(parentNodes2, node=>{
+          return (
+            node.type.split(':')[0] == 'platform_nodes'
+          )
+        });
+        let appBaseClosest2 = lodash.find(parentNodes2, node=>{
+          return (
+            node.type.split(':')[0] == 'app_base'
+          )
+        });
+
+        // if(appBaseClosest2){
+        //   console.log('appBase MATCH');
+        // } else {
+        //   // console.log('nomatch appBase', node2._id);
+        //   try {
+        //     console.log(node2.parent._id);
+        //     console.log(node2.parent.parent._id);
+        //   }catch(err){}
+        // }
+
+        // if(platformClosest1 && platformClosest2){
+        //   console.log('platform MATCH');
+        // } else {
+        //   console.log('nomatch');
+        // }
+
+        if(
+          platformClosest1 &&
+          platformClosest2 &&
+          appBaseClosest1 &&
+          appBaseClosest2 &&
+          platformClosest1._id == platformClosest2._id
+          &&
+          appBaseClosest1._id == appBaseClosest2._id
+          ){
+          return true;
+        }
+
+        // console.log('Missed sameAppPlatform');
+
+        return false;
+
+      },
+
       ipfs: { // temporary placeholder for reading ipfs file nodes 
         files: {
           cat: (hash)=>{
@@ -1143,24 +1263,34 @@ class App extends Component {
         opts = opts || {};
         return new Promise(async (resolve, reject)=>{
 
+          // Uses platformClosest and appBaseClosest from CodeNode that was used (namespaced to app_base) 
+
           // Returns the Node for the capability specified
           let capabilityNodes = await universe.searchMemory({
             filter: {
               sqlFilter: {
                 type: "capability:0.0.1:local:187h78h23",
-                // nodeId: null, // New: App-level, OLD: top-level/root
+                // nodeId: null, // New: App-level (in filter), OLD: top-level/root
                 data: {
                   key: nameSemver // todo: semver with version!
                 }
               },
-              // filterNodes: tmpNodes=>{
-              //   return new Promise((resolve, reject)=>{
-              //     // tmpNodes = tmpNodes.filter(tmpNode=>{
-              //     //   return tmpNode.data.method == 'read';
-              //     // })
-              //     resolve(tmpNodes);
-              //   });
-              // },
+              filterNodes: tmpNodes=>{
+                return new Promise((resolve, reject)=>{
+                  // tmpNodes = tmpNodes.filter(tmpNode=>{
+                  //   return tmpNode.data.method == 'read';
+                  // })
+                  tmpNodes = lodash.filter(tmpNodes, tmpNode=>{
+                    if(universe.isParentOf(platformClosest._id, tmpNode)){
+                      // console.log('FOUND IT UNDER SAME APP!!!!!', tmpNode._id);
+                      console.log('FOUND PARENT1!');
+                      return true;
+                    }
+                    return false;
+                  })
+                  resolve(tmpNodes);
+                });
+              },
             }
           });
           // capabilityNodes = universe.lodash.sortBy(capabilityNodes,capNode=>{
@@ -1202,6 +1332,8 @@ class App extends Component {
               externalInputNode: externalInputNode
             }
           }
+
+          // console.log('Running Capability');
 
           // run in vm
           let responseNode;
@@ -1843,6 +1975,8 @@ class App extends Component {
   fetchNodes(filterObj, depth){
     // also fetches all child nodes, for 10 levels deep
 
+    // NOT stripping "broken" nodes? (am doing on cloud!) 
+
     // console.log('fetchingNodes');
     return new Promise(async (resolve,reject)=>{
       depth = depth || 1;
@@ -1858,13 +1992,22 @@ class App extends Component {
 
       for(let node of nodes){
 
-        // get parent
+        // get parent(s)
+        function getParentChain(nodesDb, nodeId){
+          let parent = lodash.find(nodesDb, {_id: nodeId});
+          if(parent.nodeId){
+            parent.parent = getParentChain(nodesDb, parent.nodeId);
+          }
+          return parent;
+        }
+
         if(node.nodeId){
           // find parent 
-          let parent = await this.fetchNodes({_id: node.nodeId}, depth);
-          if(parent && parent.length){
-            node.parent = parent[0];
-          }
+          // let parent = await this.fetchNodes({_id: node.nodeId}, depth);
+          // if(parent && parent.length){
+          //   node.parent = parent[0];
+          // }
+          node.parent = getParentChain(this.state.nodesDb, node.nodeId); 
 
         }
 
