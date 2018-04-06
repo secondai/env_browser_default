@@ -396,6 +396,7 @@ class App extends Component {
 
         this.setState({
           autolaunching: true,
+          autolaunchName: `${existing.name}`,
           initialLoad: true
         });
 
@@ -866,6 +867,22 @@ class App extends Component {
       fetch: window.fetch.bind(window),
       localStorage,
       handleCreateNewSecondFromNodes: this.handleCreateNewSecondFromNodes,
+      handleLoadApp: (localApp)=>{
+        redirectToRoot = true;
+        this.handleLoadApp(localApp.storageKey);
+      },
+      getBrowserApps: async ()=>{
+        // "running" apps 
+        let localAppsList = await localforage.getItem(SECOND_LIST_OF_LOCAL_APPS);
+        return localAppsList || [];
+
+        // .then(localAppsList=>{
+        //   localAppsList = localAppsList || [];
+        //   this.setState({
+        //     localAppsList
+        //   }, resolve)
+        // })
+      },
       alert,
       console,
       copy, // to clipboard
@@ -2370,7 +2387,7 @@ class App extends Component {
   }
 
   @autobind
-  handleCreateNewSecondFromNodes(name, startNodes){
+  handleCreateNewSecondFromNodes(name, appId, startNodes){
 
     // Creates local instance from remote nodes 
 
@@ -2392,6 +2409,7 @@ class App extends Component {
     // Nodes are passed in 
     localAppsList.push({
       name,
+      appId,
       storageKey: newStorageKey,
       // basicKey: basicKey,
       createdAt: (new Date()).getTime()
@@ -2509,7 +2527,7 @@ class App extends Component {
             <div className="hero-body">
               <div className="container has-text-centered">
                 <h1 className="title is-3">
-                  Launching App
+                  Launching App: {this.state.autolaunchName}
                 </h1>
                 <h2 className="subtitle2">
                   <button className="button" onClick={e=>this.setState({autolaunching: false})}>
