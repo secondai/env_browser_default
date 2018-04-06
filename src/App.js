@@ -71,6 +71,8 @@ import GitHub from 'github-api';
 window.localforage = localforage;
 
 let baseChainUrl = 'https://api.getasecond.com';
+let redirectToRoot = false;
+
 // let baseChainUrl = 'http://localhost:7011';
 
 // OrbitDB uses Pubsub which is an experimental feature
@@ -518,6 +520,11 @@ class App extends Component {
 
       }
 
+      // reload page if a new app is launching 
+      if(redirectToRoot){
+        return window.location = '/';
+      }
+
       console.log('Running startup!');
       console.log('current memory:', this.state.nodesDb);
 
@@ -829,8 +836,6 @@ class App extends Component {
 
     // app_base and platform_nodes for CodeNode 
     // - useful to have as "global" values for the request, so we don't have to pass to each loadCapabilities function 
-
-    // console.log('sameAppPlatform');
     function getParentNodes(node){
       let nodes = [node];
       if(node.parent){
@@ -838,12 +843,7 @@ class App extends Component {
       }
       return nodes;
     }
-    
     let parentNodes = getParentNodes(codeNode);
-
-    // console.log('NodeParents2:', node2._id, parentNodes2.length);
-
-    // see if first match of each is correct (aka "outwards" (not from root, but from nodes)) 
     let platformClosest = lodash.find(parentNodes, node=>{
       return (
         node.type.split(':')[0] == 'platform_nodes'
@@ -2373,6 +2373,9 @@ class App extends Component {
   handleCreateNewSecondFromNodes(name, startNodes){
 
     // Creates local instance from remote nodes 
+
+    // global variable for redirecting to '/' after loading nodes 
+    redirectToRoot = true;
 
     // kill/clear previous (expecting it to exist) 
     this.secondReady = new Promise(resolve=>{
