@@ -341,7 +341,7 @@ class App extends Component {
       useLocalZip: false,
       nodesDb: [], // empty at first, will load from indexDb (localForage) 
       startupName: '',
-      startupZipUrl: ''
+      startupZipUrl: process.env.REACT_APP_STARTUP_GITHUB_BUNDLE || ''
     }
 
   }
@@ -632,10 +632,10 @@ class App extends Component {
               data: tmpNode.data,
             }
             let savedChildNode = await this.insertNode(newChildNode);
-
+            console.log('savedChildNode', savedChildNode);
             if(tmpNode.nodes && tmpNode.nodes.length){
 
-              await saveChildNodes(savedChildNode.data._id, tmpNode.nodes);
+              await saveChildNodes(savedChildNode._id, tmpNode.nodes);
 
             }
           }
@@ -689,18 +689,80 @@ class App extends Component {
         console.log('Running browser request:', InputNode); //, this.state.nodesDb);
 
         // fetch and run code, pass in 
-        let nodes = await this.fetchNodes({
-          nodeId: null, // get top-level only! 
-          type: 'incoming_from_universe:0.0.1:local:298fj293'
-        });
+        let nodes;
+        let nodeId;
+        let CodeNode;
 
-        // console.log('NODES:', nodes);
-        if(!nodes || !nodes.length){
-          console.error('Missing incoming_from_universe:0.0.1:local:298fj293 Node');
-          return;
+
+        // // console.log('NODES:', nodes);
+        if(1==0){
+          // Old way (at root, no "app" concept) 
+          nodes = await this.fetchNodes({
+            nodeId: null, // get top-level only! 
+            type: 'incoming_from_universe:0.0.1:local:298fj293'
+          });
+
+          // if(!nodes || !nodes.length){
+          //   console.error('Missing incoming_from_universe:0.0.1:local:298fj293 Node');
+          //   return;
+          // }
+
+          // let foundIncomingNode = nodes[0];
+          nodeId = nodes[0]._id;
+
+          CodeNode = lodash.find(nodes[0].nodes,{type: 'code:0.0.1:local:32498h32f2'});
+
+        } else {
+
+          // new way, as "part of an app" (TODO: finish "inside this app" logic) 
+
+          // get launch code for default app in memory 
+          nodes = await this.fetchNodes({
+            type: 'incoming_from_universe:0.0.1:local:298fj293'
+          });
+
+          // find correct node for appId
+          // console.log('NODES matching incoming_from_universe:', nodes.length);
+
+          let foundIncomingNode = nodes.find(node=>{
+            // let node2 = JSON.parse(JSON.stringify(node));
+            // delete node2.data;
+            // node2.nodes = (node2.nodes || []).map(n=>{
+            //   delete n.data;
+            //   return n;
+            // });
+            // console.log('NODE2:', node2.parent ? node2.parent.type:null); //, JSON.stringify(node2,null,2));
+            try {
+              let parent = node.parent;
+              if(parent.type.split(':')[0] != 'platform_nodes' || parent.data.platform != 'browser'){
+                return false;
+              }
+              let appbaseParent = parent.parent;
+              if(appbaseParent.type.split(':')[0] == 'app_base' && 
+                // appbaseParent.data.appId == (process.env.DEFAULT_LAUNCH_APPID || 'a22a4864-773d-4b0b-bf69-0b2c0bc7f3e0') &&
+                // app to use? assuming only a single frontend app (TODO: multiple!) 
+                appbaseParent.data.release == 'production'
+                ){
+                // console.log('FOUND!');
+                return true;
+              }
+            }catch(err){}
+            return false;
+          });
+          
+          if(!foundIncomingNode){
+            console.error('Missing foundIncomingNode');
+            return false;
+          }
+
+          // console.log('incoming_from_universe:0.0.1:local:298fj293 Node:', foundIncomingNode ? true:false, foundIncomingNode.parent.type, foundIncomingNode.parent.data);
+
+          // let foundIncomingNode = nodes[0];
+          nodeId = foundIncomingNode._id;
+
+          CodeNode = lodash.find(foundIncomingNode.nodes,{type: 'code:0.0.1:local:32498h32f2'});
+
         }
-
-        let CodeNode = lodash.find(nodes[0].nodes,{type: 'code:0.0.1:local:32498h32f2'});
 
         if(!CodeNode){
           console.error('Missing code:0.0.1:local:32498h32f2 to handle incoming_browser_request');
@@ -1086,7 +1148,7 @@ class App extends Component {
             filter: {
               sqlFilter: {
                 type: "capability:0.0.1:local:187h78h23",
-                nodeId: null, // top-level/root,
+                // nodeId: null, // New: App-level, OLD: top-level/root
                 data: {
                   key: nameSemver // todo: semver with version!
                 }
@@ -1175,7 +1237,7 @@ class App extends Component {
             filter: {
               sqlFilter: {
                 type: "capability:0.0.1:local:187h78h23",
-                nodeId: null // top-level/root
+                // nodeId: null // New: App-level, OLD: top-level/root
               },
               // filterNodes: tmpNodes=>{
               //   return new Promise((resolve, reject)=>{
@@ -1535,19 +1597,24 @@ class App extends Component {
             });
           }
 
+          // console.log('searchMemory Nodes:', nodes.length, nodes)
+
           // run "filterNode" after all the results are found
-          if(typeof(opts.filter.filterNodes) == 'function'){
+          if(typeof opts.filter.filterNodes == 'function'){
             // console.log('filterNoes1');
             nodes = opts.filter.filterNodes(nodes); // may be a promise (probably is!) 
             // console.log('filterNoes2');
           }
 
+          // console.log('filter func:', opts.filter.filterNodes);
+
           Promise.resolve(nodes)
           .then(nodes=>{
-            resolve(cJSON.parse(cJSON.stringify(nodes)));
+            let searchResults = cJSON.parse(cJSON.stringify(nodes));
+            resolve(searchResults);
             let searchEnd = (new Date()).getTime();
             window.searchTime += (searchEnd - searchStart);
-            console.log('searchTime:', window.searchTime, (searchEnd - searchStart));
+            // console.log('searchTime:', window.searchTime, (searchEnd - searchStart), searchResults);
           })
           .catch(err=>{
             resolve({
@@ -1780,14 +1847,14 @@ class App extends Component {
     return new Promise(async (resolve,reject)=>{
       depth = depth || 1;
       depth++;
-      if(depth > 5){
+      if(depth > 6){
         // too deep! (or pointing in a loop!) 
         return resolve([]);
       }
 
       let nodes = lodash.filter(this.state.nodesDb, filterObj); // mimics simply object requests 
 
-      // console.log('Found nodes!');
+      // console.log('fetchNodes w/ filter:', nodes.length);
 
       for(let node of nodes){
 
