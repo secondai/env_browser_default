@@ -328,8 +328,6 @@ class App extends Component {
       this.secondReadyResolve = resolve;
     });
 
-    console.log('App Startup.', process.env.REACT_APP_STARTUP_GITHUB_BUNDLE);
-
     this.state = {
       // user: user
       capabilities: null, // turns into a function, or is a list of current capabilities?  (Load, then Use capability?)
@@ -343,7 +341,7 @@ class App extends Component {
       useLocalZip: false,
       nodesDb: [], // empty at first, will load from indexDb (localForage) 
       startupName: '',
-      startupZipUrl: process.env.REACT_APP_STARTUP_GITHUB_BUNDLE || ''
+      startupZipUrl: ''
     }
 
   }
@@ -465,7 +463,7 @@ class App extends Component {
       localforage.getItem('last-startup-zip-url')
       .then(startupZipUrl=>{
         console.log('found startupZipUrl:', startupZipUrl);
-        startupZipUrl = startupZipUrl || '';
+        startupZipUrl = startupZipUrl || process.env.REACT_APP_STARTUP_GITHUB_BUNDLE || '';
         this.setState({
           startupZipUrl
         },resolve)
