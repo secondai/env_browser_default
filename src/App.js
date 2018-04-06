@@ -328,6 +328,8 @@ class App extends Component {
       this.secondReadyResolve = resolve;
     });
 
+    console.log('App Startup.', process.env.REACT_APP_STARTUP_GITHUB_BUNDLE);
+
     this.state = {
       // user: user
       capabilities: null, // turns into a function, or is a list of current capabilities?  (Load, then Use capability?)
