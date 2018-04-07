@@ -396,8 +396,7 @@ class App extends Component {
 
         this.setState({
           autolaunching: true,
-          autolaunchName: `${existing.name}`,
-          initialLoad: true
+          autolaunchName: `${existing.name}`
         });
 
         window.setTimeout(()=>{
@@ -418,6 +417,41 @@ class App extends Component {
 
 
       }
+
+    } else {
+
+        // Launch App Store immediately 
+        // - uses startupZipUrl 
+        //   - TODO: bundle, prevent tons of zip downloads via corseverywhere.com 
+
+        if(this.state.startupZipUrl){
+
+          console.log('Starting autolaunch (default app, App Store)!');
+
+          this.setState({
+            autolaunching: true,
+            autolaunchName: `App Store`
+          });
+
+          window.setTimeout(()=>{
+            if(this.state.autolaunching){
+
+              // find app and autolaunch
+              console.log('Launch initiated after no cancel');
+
+
+              this.handleCreateNewSecondFromRemoteZip();
+              this.setState({
+                autolaunching: false
+              });
+
+            }
+
+          },2000);
+
+        } else {
+          console.log('Missing startupZipUrl');
+        }
 
     }
 
@@ -467,6 +501,7 @@ class App extends Component {
       .then(startupZipUrl=>{
         console.log('found startupZipUrl:', startupZipUrl);
         startupZipUrl = startupZipUrl || process.env.REACT_APP_STARTUP_GITHUB_BUNDLE || '';
+        console.log('setting startupZipUrl', startupZipUrl);
         this.setState({
           startupZipUrl
         },resolve)
@@ -476,6 +511,8 @@ class App extends Component {
 
 
     await Promise.all(promises);
+
+    return true;
 
   }
 
@@ -2510,8 +2547,8 @@ class App extends Component {
           <div className="hero is-large">
             <div className="hero-body">
               <div className="container has-text-centered">
-                <h1 className="title">
-                  ...
+                <h1 className="title is-4">
+                  Fetching Apps
                 </h1>
               </div>
             </div>
@@ -2526,7 +2563,7 @@ class App extends Component {
           <div className="hero is-large">
             <div className="hero-body">
               <div className="container has-text-centered">
-                <h1 className="title is-3">
+                <h1 className="title is-4">
                   Launching App: {this.state.autolaunchName}
                 </h1>
                 <h2 className="subtitle2">
