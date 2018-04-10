@@ -673,6 +673,7 @@ class App extends Component {
           
           for(let tmpNode of childNodes){
             let newChildNode = {
+              name: tmpNode.name, 
               nodeId,
               type: tmpNode.type,
               data: tmpNode.data,
@@ -768,7 +769,7 @@ class App extends Component {
           });
 
           // find correct node for appId
-          // console.log('NODES matching incoming_from_universe:', nodes.length);
+          console.log('NODES matching incoming_from_universe:', nodes.length, nodes);
 
           let foundIncomingNode = nodes.find(node=>{
             // let node2 = JSON.parse(JSON.stringify(node));
@@ -1753,6 +1754,7 @@ class App extends Component {
       },
       newNode: this.insertNode,
       updateNode: this.updateNode,
+      removeNode: this.removeNode,
       clearMemory: ()=>{
         return new Promise((resolve,reject)=>{
           this.setState({
@@ -2088,6 +2090,8 @@ class App extends Component {
       // }
 
       node._id = node._id || uuidv4();
+      node.name = node.hasOwnProperty('name') ? node.name : uuidv4();
+      node.type = node.type || ''; // invalid tho
       node.nodeId = node.nodeId || null;
       node.createdAt = (new Date()).getTime();
 
@@ -2120,6 +2124,7 @@ class App extends Component {
 
       // console.log('Found nodes!');
       internalNode.nodeId = updateNode.hasOwnProperty('nodeId') ? updateNode.nodeId : internalNode.nodeId;
+      internalNode.name = updateNode.hasOwnProperty('name') ? updateNode.name : internalNode.name;
       internalNode.type = updateNode.hasOwnProperty('type') ? updateNode.type : internalNode.type;
       internalNode.data = updateNode.hasOwnProperty('data') ? updateNode.data : internalNode.data;
       internalNode.updatedAt = updateNode.hasOwnProperty('updatedAt') ? (updateNode.updatedAt || (new Date()).getTime()) : internalNode.updatedAt;
@@ -2135,6 +2140,52 @@ class App extends Component {
         console.log('Node updated', updateNode);
         await this.makeUpdate(this.state.nodesDb);
         resolve(updateNode);
+      });
+
+    });
+  }
+
+  @autobind
+  removeNode(nodeId){
+    return new Promise(async (resolve, reject)=>{
+
+      console.log('remove Node:', nodeId);
+      // if(updateNode.type == 'identity_private:0.0.1:local:3298f2j398233'){
+      //   alert(1);
+      // }
+
+      let nodes = this.state.nodesDb;
+
+
+      function removeNodeFromArray(nodeId){
+
+        lodash.remove(nodes, node=>{
+          return node._id == nodeId
+        });
+
+        let internalChildren = lodash.filter(nodes, {nodeId});  
+
+        // remove from array immediately
+
+        for(let node of internalChildren){
+          removeNodeFromArray(node._id);
+        }
+
+      }
+
+      removeNodeFromArray(nodeId);
+
+      // nodes updated after removal? 
+
+      this.setState({
+        nodesDb: nodes
+      },async ()=>{
+        console.log('Node removed', nodeId);
+        await this.makeUpdate(this.state.nodesDb);
+        resolve({
+          type: 'boolean:Qm...',
+          data: true
+        });
       });
 
     });
@@ -2333,39 +2384,51 @@ class App extends Component {
           }
         }
 
-        console.log('allFiles from Zip:', allFiles);
+        console.log('allFiles from Zip1:', allFiles);
         
-        function addChildren(id){
+        function addChildren(path){
           return new Promise(async (resolve,reject)=>{
-
+          
             let nodes = [];
-
-            for(let filepath of Object.keys(allFiles)){
-              let contents = allFiles[filepath];
-              if(filepath.indexOf('nodes/') !== 0){
-                // console.log('NOT NODE:', filepath);
-                continue;
+            try {
+                
+              for(let filepath of Object.keys(allFiles)){
+                let contents = allFiles[filepath];
+                if(filepath.indexOf(path) !== 0){
+                  // console.log('NOT NODE:', filepath);
+                  continue;
+                }
+                let pathDepth = path.split('/').length;
+                let filepathDepth = filepath.split('/').length;
+                if(pathDepth == filepathDepth){
+                  // xyz.json at correct depth
+                  
+                  let parsed = jsonParse(filepath, contents);
+                  // if(parsed.nodeId == id){
+                    // console.log('Matches ID:', parsed.nodeId, id);
+                    let children = await addChildren(filepath.slice(0, filepath.length - 5) + '/'); // remove '.json'
+                    parsed.nodes = children;
+                    nodes.push(parsed);
+                  // } else {
+                  //   // console.log('No Kids:', id, parsed.nodeId);
+                  // }
+                }
+  
+  
               }
-
-              let parsed = jsonParse(filepath, contents);
-              if(parsed.nodeId == id){
-                // console.log('Matches ID:', parsed.nodeId, id);
-                let children = await addChildren(parsed._id);
-                parsed.nodes = children;
-                nodes.push(parsed);
-              } else {
-                // console.log('No Kids:', id, parsed.nodeId);
-              }
-
+            }catch(err){
+              console.error(err);
             }
 
             resolve(nodes);
-
+            
           });
         }
-
+        
+        console.log('Re-organize child nodes');
+        
         // re-organize child nodes 
-        ZipNodes = await addChildren(null); // start at root, adds children recursively 
+        ZipNodes = await addChildren('nodes/'); // start at root, adds children recursively 
 
         let secondJson = JSON.parse(allFiles['second.json']);
         // let basicKey = secondJson.name; 
