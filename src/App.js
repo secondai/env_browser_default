@@ -118,6 +118,8 @@ var jsSchema = require('js-schema');
 
 let cJSON = require('circular-json');
 
+require("underscore-query")(lodash);
+
 var EventEmitter = require('eventemitter3');
 var EE = new EventEmitter();
 

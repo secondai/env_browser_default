@@ -10156,6 +10156,10 @@ ultron@~1.1.0:
   version "1.1.0"
   resolved "https://registry.yarnpkg.com/ultron/-/ultron-1.1.0.tgz#b07a2e6a541a815fc6a34ccd4533baec307ca864"
 
+underscore-query@3.3.2:
+  version "3.3.2"
+  resolved "https://registry.yarnpkg.com/underscore-query/-/underscore-query-3.3.2.tgz#a3788afd853476c4bacf6999dd24edff63ca1b71"
+
 union@~0.4.3:
   version "0.4.6"
   resolved "https://registry.yarnpkg.com/union/-/union-0.4.6.tgz#198fbdaeba254e788b0efcb630bc11f24a2959e0"
