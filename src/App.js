@@ -28,6 +28,8 @@ import localforage from 'localforage'
 import $ from 'jquery'
 import lodash from 'lodash'
 
+import moment from 'moment'
+import { DateTime as luxon } from 'luxon'
 
 import { graphql, compose } from 'react-apollo';
 import { withApollo } from 'react-apollo';
@@ -962,6 +964,8 @@ class App extends Component {
       bigi,
       parseGitHubUrl,
       JSZip,
+      moment,
+      luxon,
       isParentOf: (parentId, node1)=>{
         // console.log('sameAppPlatform');
         function getParentNodeIds(node){
