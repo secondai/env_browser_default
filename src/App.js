@@ -125,6 +125,8 @@ require("underscore-query")(lodash);
 var EventEmitter = require('eventemitter3');
 var EE = new EventEmitter();
 
+const ReactMarkdown = require('react-markdown')
+
 // var Radium = require('radium'); // css w/ :hover for react
 
 // mkdirp-promise
@@ -953,6 +955,7 @@ class App extends Component {
       ReactSelect,
       ReactHelpers,
       ReactWithNodes: withNodesHOC,
+      ReactMarkdown,
       Speechless,
       GitHub,
       annyang,
