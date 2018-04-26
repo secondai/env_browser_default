@@ -230,10 +230,15 @@ class ErrorBoundary extends React.Component {
     console.error(error, info);
   }
 
+  @autobind
+  updateApp(){
+    window.UpdateApp();
+  }
+
   render() {
     if (this.state.hasError) {
       // You can render any custom fallback UI
-      return <h1>Something went wrong.</h1>;
+      return <h1>Something went wrong. <a onClick={this.updateApp}>update app</a></h1>;
     }
     return this.props.children;
   }
