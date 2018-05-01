@@ -396,14 +396,25 @@ class App extends Component {
 
     let localApps = this.state.localAppsList || [];
 
-    if(window.name){
+    // automatically loads the LAST matching server-specified appId 
+    // - TODO: make less brittle 
 
-      let existing = localApps.find(a=>{
-        return a.storageKey == window.name;
-      });
+    if(window.name || window.useLastOfAppId){
+
+      let existing;
+      if(window.name){
+        existing = localApps.find(a=>{
+          return a.storageKey == window.name;
+        });
+      }
+      if(window.useLastOfAppId){
+        existing = localApps.reverse().find(a=>{
+          return a.appId == window.useLastOfAppId;
+        });
+      }
 
       if(existing && existing.version != this.state.appVersion){
-        console.log('existing.version != this.state.appVersion, launching NEW');
+        console.log('existing.version != this.state.appVersion, launching NEW', existing.version, this.state.appVersion);
         existing = null;
       }
 
@@ -458,7 +469,7 @@ class App extends Component {
       });
 
       let startupDelay = window.startupDelay || 2000;
-      
+
       window.setTimeout(()=>{
         if(this.state.autolaunching){
 
