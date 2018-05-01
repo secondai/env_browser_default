@@ -413,7 +413,7 @@ class App extends Component {
         });
       }
 
-      if(existing && existing.version != this.state.appVersion){
+      if(window.useLastOfAppId && existing && existing.version != this.state.appVersion){
         console.log('existing.version != this.state.appVersion, launching NEW', existing.version, this.state.appVersion);
         existing = null;
       }
