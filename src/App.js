@@ -354,7 +354,8 @@ class App extends Component {
       useLocalZip: false,
       nodesDb: [], // empty at first, will load from indexDb (localForage) 
       startupName: '',
-      startupZipUrl: ''
+      startupZipUrl: '',
+      appVersion: window.limitedToAppVersion || 1
     }
 
   }
@@ -401,9 +402,14 @@ class App extends Component {
         return a.storageKey == window.name;
       });
 
+      if(existing && existing.version != this.state.appVersion){
+        console.log('existing.version != this.state.appVersion, launching NEW');
+        existing = null;
+      }
+
       if(existing){
         // find app and autolaunch
-        console.log('Starting autolaunch!', window.name, existing);
+        console.log('Starting autolaunch of previous', window.name, existing);
 
         this.setState({
           autolaunching: true,
@@ -416,7 +422,6 @@ class App extends Component {
             // find app and autolaunch
             console.log('Launch initiated after no cancel');
 
-
             this.handleUseExisting(existing);
             this.setState({
               autolaunching: false
@@ -426,46 +431,54 @@ class App extends Component {
 
         },2000);
 
+        this.setState({
+          initialLoad: true
+        });
+
+        return;
+
 
       }
 
-    } else {
 
-        // Launch App Store immediately 
-        // - uses startupZipUrl 
-        //   - TODO: bundle, prevent tons of zip downloads via corseverywhere.com 
+    } 
 
-        if(this.state.startupZipUrl){
+    // Launch Default / App Store immediately 
+    // - uses startupZipUrl 
+    //   - TODO: bundle, prevent tons of zip downloads via corseverywhere.com 
 
-          console.log('Starting autolaunch (default app, App Store)!');
+    if(this.state.startupZipUrl){
 
+      console.log('Starting autolaunch (default app, App Store)!');
+
+      this.setState({
+        autolaunching: true,
+        autolaunchName: window.limitedToAppName  || `App Store`,
+        startupName: window.limitedToAppName || 'Default App Store' // required for launching via handleCreateNewSecondFromRemoteZip
+      });
+
+      let startupDelay = window.startupDelay || 2000;
+      
+      window.setTimeout(()=>{
+        if(this.state.autolaunching){
+
+          // find app and autolaunch
+          console.log('Launch initiated after no cancel');
+
+
+          this.handleCreateNewSecondFromRemoteZip();
           this.setState({
-            autolaunching: true,
-            autolaunchName: window.limitedToAppName  || `App Store`,
-            startupName: window.limitedToAppName || 'Default App Store' // required for launching via handleCreateNewSecondFromRemoteZip
+            autolaunching: false
           });
 
-          window.setTimeout(()=>{
-            if(this.state.autolaunching){
-
-              // find app and autolaunch
-              console.log('Launch initiated after no cancel');
-
-
-              this.handleCreateNewSecondFromRemoteZip();
-              this.setState({
-                autolaunching: false
-              });
-
-            }
-
-          },2000);
-
-        } else {
-          console.log('Missing startupZipUrl');
         }
 
+      },startupDelay);
+
+    } else {
+      console.log('Missing startupZipUrl');
     }
+
 
     this.setState({
       initialLoad: true
@@ -2225,6 +2238,8 @@ class App extends Component {
 
     let newStorageKey = 'seconddb-' + uuidv4();
 
+    let version = this.state.appVersion; 
+
     let name = window.prompt('name for display', basicKey);
     if(!name){
       return false;
@@ -2232,6 +2247,7 @@ class App extends Component {
 
     localAppsList.push({
       name,
+      version,
       storageKey: newStorageKey,
       basicKey: basicKey,
       createdAt: (new Date()).getTime()
@@ -2644,11 +2660,14 @@ class App extends Component {
                 <h1 className="title is-4">
                   Launching App: {this.state.autolaunchName}
                 </h1>
-                <h2 className="subtitle2">
-                  <button className="button" onClick={e=>this.setState({autolaunching: false})}>
-                    Cancel
-                  </button>
-                </h2>
+                {
+                  window.disallowAutoLaunchCancel ? '':
+                  <h2 className="subtitle2">
+                    <button className="button" onClick={e=>this.setState({autolaunching: false})}>
+                      Cancel
+                    </button>
+                  </h2>
+                }
               </div>
             </div>
           </div>
