@@ -396,27 +396,37 @@ class App extends Component {
 
     let localApps = this.state.localAppsList || [];
 
+    console.log('LocalApps:', localApps);
+
     // automatically loads the LAST matching server-specified appId 
     // - TODO: make less brittle 
 
     if(window.name || window.useLastOfAppId){
 
+      console.log('checking window.name or window.useLastOfAppId');
+
       let existing;
       if(window.name){
+        console.log('checking for window.name:', window.name);
         existing = localApps.find(a=>{
           return a.storageKey == window.name;
         });
       }
-      if(window.useLastOfAppId){
+      if(!window.name && window.useLastOfAppId){
+        console.log('checking for useLastOfAppId:', window.useLastOfAppId);
         existing = localApps.reverse().find(a=>{
           return a.appId == window.useLastOfAppId;
         });
+
+        if(existing && existing.version != this.state.appVersion){
+          console.log('existing.version != this.state.appVersion, launching NEW', existing.version, this.state.appVersion);
+          existing = null;
+        }
+
       }
 
-      if(window.useLastOfAppId && existing && existing.version != this.state.appVersion){
-        console.log('existing.version != this.state.appVersion, launching NEW', existing.version, this.state.appVersion);
-        existing = null;
-      }
+      console.log('existing1', existing);
+
 
       if(existing){
         // find app and autolaunch
@@ -449,6 +459,8 @@ class App extends Component {
         return;
 
 
+      } else {
+        console.log('Unable to find existing, even though specified/expecting');
       }
 
 
