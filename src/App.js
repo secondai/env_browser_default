@@ -441,7 +441,7 @@ class App extends Component {
 
           this.setState({
             autolaunching: true,
-            autolaunchName: `App Store`,
+            autolaunchName: window.limitedToAppName  || `App Store`,
             startupName: window.limitedToAppName || 'Default App Store' // required for launching via handleCreateNewSecondFromRemoteZip
           });
 
