@@ -411,12 +411,37 @@ class App extends Component {
         existing = localApps.find(a=>{
           return a.storageKey == window.name;
         });
+        if(existing){
+          console.log('window.name has existing app to launch', existing);
+        }
       }
-      if(!window.name && window.useLastOfAppId){
+      if(window.useLastOfAppId){
+        // expecting to launch only a certain type of app (default to it, at least) 
         console.log('checking for useLastOfAppId:', window.useLastOfAppId);
-        existing = localApps.reverse().find(a=>{
-          return a.appId == window.useLastOfAppId;
-        });
+        // already found?
+        if(existing){ // && existing.appId == window.useLastOfAppId){
+          // window.name matched, see if appId matches for that app 
+          if(existing.appId == window.useLastOfAppId){
+            // good to re-launch app! 
+            // - TODO: verify not duplicate running in separate window, sharing database on accident? (do in-app?) 
+            console.log('good to launch app!');
+          } else {
+            // window.name didn't match type of app
+            // - search for latest of that type of app 
+            console.log('window.name didnt match type of app!');
+            existing = localApps.reverse().find(a=>{
+              return a.appId == window.useLastOfAppId;
+            });
+          }
+
+        } else {
+          // window.name empty (no last running app in window) 
+          // - find existing app instance to run (TODO: unless app is defined as run-separate-instances) 
+          console.log('window.name empty (no last running app in window)');
+          existing = localApps.reverse().find(a=>{
+            return a.appId == window.useLastOfAppId;
+          });
+        }
 
         if(existing && existing.version != this.state.appVersion){
           console.log('existing.version != this.state.appVersion, launching NEW', existing.version, this.state.appVersion);
