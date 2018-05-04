@@ -548,7 +548,10 @@ class App extends Component {
       localforage.getItem('last-startup-zip-url')
       .then(startupZipUrl=>{
         console.log('found startupZipUrl:', startupZipUrl);
-        startupZipUrl = startupZipUrl || window.limitedToAppZip || process.env.REACT_APP_STARTUP_GITHUB_BUNDLE || '';
+        startupZipUrl = startupZipUrl || process.env.REACT_APP_STARTUP_GITHUB_BUNDLE || '';
+        if(window.limitedToAppZip && window.limitedToAppZip != startupZipUrl){
+          startupZipUrl = window.limitedToAppZip;
+        }
         console.log('setting startupZipUrl', startupZipUrl);
         this.setState({
           startupZipUrl
