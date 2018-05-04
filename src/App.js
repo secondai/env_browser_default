@@ -173,7 +173,7 @@ var StellarSdk = require('stellar-sdk');
 let crypto = require('crypto');
 // var SHA256 = require("crypto-js/sha256");
 // window.sha256 = SHA256;
-// var jsSHA256 = require('js-sha256').sha256;
+var jsSHA256 = require('js-sha256').sha256;
 
 
 // temporary location for code for incoming_from_universe:0.0.1:local:298fj293
@@ -1003,6 +1003,7 @@ class App extends Component {
       jsSchema,
       SHA1,
       SHA256,
+      jsSHA256,
       crypto,
       multihash, 
       StellarSdk, 
