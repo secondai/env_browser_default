@@ -2530,6 +2530,7 @@ class App extends Component {
 
         localAppsList.push({
           name,
+          appId: secondJson.appId,
           storageKey: newStorageKey,
           // basicKey: basicKey,
           createdAt: (new Date()).getTime()
