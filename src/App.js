@@ -2531,6 +2531,7 @@ class App extends Component {
         localAppsList.push({
           name,
           appId: secondJson.appId,
+          version: secondJson.version || secondJson.v || window.limitedToAppVersion, // keep versions matching 
           storageKey: newStorageKey,
           // basicKey: basicKey,
           createdAt: (new Date()).getTime()
@@ -2594,6 +2595,7 @@ class App extends Component {
     localAppsList.push({
       name,
       appId,
+      version: window.limitedToAppVersion || 1,
       storageKey: newStorageKey,
       // basicKey: basicKey,
       createdAt: (new Date()).getTime()
