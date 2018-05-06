@@ -353,7 +353,7 @@ class App extends Component {
       useLocalforage: false,
       useLocalZip: false,
       nodesDb: [], // empty at first, will load from indexDb (localForage) 
-      startupName: '',
+      startupName: window.startupName || '',
       startupZipUrl: '',
       appVersion: window.limitedToAppVersion || 1
     }
@@ -2388,134 +2388,197 @@ class App extends Component {
 
     let url = this.state.startupZipUrl;
 
-    let gh = parseGitHubUrl(url);
+    if(url.indexOf('github') !== -1){
+
+      // github url
+
+      let gh = parseGitHubUrl(url);
 
 
-    // If no name, fetch the name first 
-    let startupName = this.state.startupName;
-    if(!startupName || !startupName.length){
+      // If no name, fetch the name first 
+      let startupName = this.state.startupName;
+      if(!startupName || !startupName.length){
 
-      let GH = new GitHub();
-      let ghr = GH.getRepo(gh.owner, gh.name);
-      ghr.getContents(gh.branch,'second.json',false,(err,val)=>{
-        if(err){
-          alert('Failed finding valid second.json');
-          return false;
-        }
-        let secondJson = JSON.parse(atob(val.content));
-        console.log('secondjson:', secondJson);
-        this.setState({
-          startupName: secondJson.name || '',
-          launching: false
-        });
+        let GH = new GitHub();
+        let ghr = GH.getRepo(gh.owner, gh.name);
+        ghr.getContents(gh.branch,'second.json',false,(err,val)=>{
+          if(err){
+            alert('Failed finding valid second.json');
+            return false;
+          }
+          let secondJson = JSON.parse(atob(val.content));
+          console.log('secondjson:', secondJson);
+          this.setState({
+            startupName: secondJson.name || '',
+            launching: false
+          });
+        })
+
+
+        return false;
+      }
+
+      // converts startup git url into username/password 
+      // - eventually allow links to be pasted, parse accordingly 
+
+      // parse github links and re-organize to fit .zip model 
+
+      if(gh.owner && 
+        gh.name && 
+        gh.repo && 
+        gh.branch){
+        url = `https://github.com/${gh.repo}/archive/${gh.branch}.zip`;
+      }
+
+      // cannot simply follow github zipball/tarball links :( 
+      fetch(`https://cors-anywhere.herokuapp.com/${url}`,{
+        // mode: 'no-cors' 
+      })
+      .then(response=>{
+        // console.log('Response:', response);
+        return response.arrayBuffer();
+      })
+      .then(JSZip.loadAsync)
+      // .then(=>{
+        // JSZip.loadAsync(arrBuff)
+        .then(async (zip)=>{
+          console.log('loaded zip data!', zip);
+
+          // ZIP is valid! 
+          let files = zip.files;
+
+          function readFilePath(p){
+            return new Promise(async (resolve,reject)=>{
+              console.log('path:', p);
+              let r = await files[p].async('text')
+              resolve(r);
+            });
+          }
+
+          // load all the files 
+          let allFiles = {};
+          for(let filepath of Object.keys(files)){
+            let file = files[filepath];
+            if(file.dir){
+
+            } else {
+              // console.log('filepath:', filepath);
+              let contents = await readFilePath(filepath);
+              // console.log('contents:', contents);
+              let normalizedPath = filepath.split('/').splice(1).join('/');
+              allFiles[normalizedPath] = contents;
+            }
+          }
+
+          console.log('allFiles from Zip1:', allFiles);
+          
+          function addChildren(path){
+            return new Promise(async (resolve,reject)=>{
+            
+              let nodes = [];
+              try {
+                  
+                for(let filepath of Object.keys(allFiles)){
+                  let contents = allFiles[filepath];
+                  if(filepath.indexOf(path) !== 0){
+                    // console.log('NOT NODE:', filepath);
+                    continue;
+                  }
+                  let pathDepth = path.split('/').length;
+                  let filepathDepth = filepath.split('/').length;
+                  if(pathDepth == filepathDepth){
+                    // xyz.json at correct depth
+                    
+                    let parsed = jsonParse(filepath, contents);
+                    // if(parsed.nodeId == id){
+                      // console.log('Matches ID:', parsed.nodeId, id);
+                      let children = await addChildren(filepath.slice(0, filepath.length - 5) + '/'); // remove '.json'
+                      parsed.nodes = children;
+                      nodes.push(parsed);
+                    // } else {
+                    //   // console.log('No Kids:', id, parsed.nodeId);
+                    // }
+                  }
+    
+    
+                }
+              }catch(err){
+                console.error(err);
+              }
+
+              resolve(nodes);
+              
+            });
+          }
+          
+          console.log('Re-organize child nodes');
+          
+          // re-organize child nodes 
+          ZipNodes = await addChildren('nodes/'); // start at root, adds children recursively 
+
+          let secondJson = JSON.parse(allFiles['second.json']);
+          // let basicKey = secondJson.name; 
+
+          console.log('ZipNodes:', ZipNodes);
+
+          // Add app to localApps list (for relaunching after a page refresh) 
+
+          let localAppsList = this.state.localAppsList;
+
+          let newStorageKey = 'seconddb-' + uuidv4();
+
+          let name = this.state.startupName; //window.prompt('name for display', secondJson.name);
+          if(!name || !name.length){
+            return false;
+          }
+
+          localAppsList.push({
+            name,
+            appId: secondJson.appId,
+            version: secondJson.version || secondJson.v || window.limitedToAppVersion, // keep versions matching 
+            storageKey: newStorageKey,
+            // basicKey: basicKey,
+            createdAt: (new Date()).getTime()
+          });
+
+          localforage.setItem(SECOND_LIST_OF_LOCAL_APPS, localAppsList).then(()=>{
+            // localStorage.setItem('latest-storage-update',JSON.stringify((new Date()).getTime()));
+
+            console.log('Added app to list');
+            this.setState({
+              // useLocalforage: true
+              useLocalZip: true
+            },()=>{
+              this.handleLoadApp(newStorageKey);
+            });
+
+          });
+
+
+
+
+        // });
+
       })
 
+    } else {
 
-      return false;
-    }
+      console.log('Fetching second-hosted app url');
 
-    // converts startup git url into username/password 
-    // - eventually allow links to be pasted, parse accordingly 
+      // second-hosted app url 
+      // - NOT zipped! 
+      fetch(url,{
+        // mode: 'no-cors' 
+      })
+      .then(response=>{
+        console.log('Response:', response);
+        // return response.arrayBuffer();
+        return response.json();
+      })
+      .then(appBaseJson=>{
+        console.log('appBaseJson', appBaseJson);
 
-    // parse github links and re-organize to fit .zip model 
-
-    if(gh.owner && 
-      gh.name && 
-      gh.repo && 
-      gh.branch){
-      url = `https://github.com/${gh.repo}/archive/${gh.branch}.zip`;
-    }
-
-    // cannot simply follow github zipball/tarball links :( 
-    fetch(`https://cors-anywhere.herokuapp.com/${url}`,{
-      // mode: 'no-cors' 
-    })
-    .then(response=>{
-      // console.log('Response:', response);
-      return response.arrayBuffer();
-    })
-    .then(JSZip.loadAsync)
-    // .then(=>{
-      // JSZip.loadAsync(arrBuff)
-      .then(async (zip)=>{
-        console.log('loaded zip data!', zip);
-
-        // ZIP is valid! 
-        let files = zip.files;
-
-        function readFilePath(p){
-          return new Promise(async (resolve,reject)=>{
-            console.log('path:', p);
-            let r = await files[p].async('text')
-            resolve(r);
-          });
-        }
-
-        // load all the files 
-        let allFiles = {};
-        for(let filepath of Object.keys(files)){
-          let file = files[filepath];
-          if(file.dir){
-
-          } else {
-            // console.log('filepath:', filepath);
-            let contents = await readFilePath(filepath);
-            // console.log('contents:', contents);
-            let normalizedPath = filepath.split('/').splice(1).join('/');
-            allFiles[normalizedPath] = contents;
-          }
-        }
-
-        console.log('allFiles from Zip1:', allFiles);
-        
-        function addChildren(path){
-          return new Promise(async (resolve,reject)=>{
-          
-            let nodes = [];
-            try {
-                
-              for(let filepath of Object.keys(allFiles)){
-                let contents = allFiles[filepath];
-                if(filepath.indexOf(path) !== 0){
-                  // console.log('NOT NODE:', filepath);
-                  continue;
-                }
-                let pathDepth = path.split('/').length;
-                let filepathDepth = filepath.split('/').length;
-                if(pathDepth == filepathDepth){
-                  // xyz.json at correct depth
-                  
-                  let parsed = jsonParse(filepath, contents);
-                  // if(parsed.nodeId == id){
-                    // console.log('Matches ID:', parsed.nodeId, id);
-                    let children = await addChildren(filepath.slice(0, filepath.length - 5) + '/'); // remove '.json'
-                    parsed.nodes = children;
-                    nodes.push(parsed);
-                  // } else {
-                  //   // console.log('No Kids:', id, parsed.nodeId);
-                  // }
-                }
-  
-  
-              }
-            }catch(err){
-              console.error(err);
-            }
-
-            resolve(nodes);
-            
-          });
-        }
-        
-        console.log('Re-organize child nodes');
-        
-        // re-organize child nodes 
-        ZipNodes = await addChildren('nodes/'); // start at root, adds children recursively 
-
-        let secondJson = JSON.parse(allFiles['second.json']);
-        // let basicKey = secondJson.name; 
-
-        console.log('ZipNodes:', ZipNodes);
+        ZipNodes = [appBaseJson];
 
         // Add app to localApps list (for relaunching after a page refresh) 
 
@@ -2525,13 +2588,16 @@ class App extends Component {
 
         let name = this.state.startupName; //window.prompt('name for display', secondJson.name);
         if(!name || !name.length){
-          return false;
+          name = appBaseJson.data.name;
+          this.setState({
+            startupName: name
+          });
         }
 
         localAppsList.push({
           name,
-          appId: secondJson.appId,
-          version: secondJson.version || secondJson.v || window.limitedToAppVersion, // keep versions matching 
+          appId: appBaseJson.data.appId,
+          version: appBaseJson.data.version || appBaseJson.data.v || window.limitedToAppVersion, // keep versions matching 
           storageKey: newStorageKey,
           // basicKey: basicKey,
           createdAt: (new Date()).getTime()
@@ -2551,11 +2617,9 @@ class App extends Component {
         });
 
 
+      })
 
-
-      // });
-
-    })
+    }
 
     // JSZipUtils.getBinaryContent('https://codeload.github.com/secondai/bundle_browser_user/legacy.zip/master', function(err, data) {
     //     if(err) {
