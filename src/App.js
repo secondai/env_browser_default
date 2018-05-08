@@ -86,7 +86,7 @@ let redirectToRoot = false;
 // const IPFS = require('ipfs')
 // // const OrbitDB = require('orbit-db')
 // const ipfs = new IPFS(ipfsOptions)
-const ipfs = new window.Ipfs(); // using script tag for now
+let ipfs; // = new window.Ipfs(); // using script tag for now
 // window.ipfs = ipfs;
 
 
@@ -976,6 +976,11 @@ class App extends Component {
 
     let universe = {
       // React, // React.Component is available 
+      enableIpfs: ()=>{
+        if(!ipfs){
+          ipfs = new window.Ipfs(); // using script tag for now
+        }
+      },
       env: process.env, // REACT_APP...
       $,
       fetch: window.fetch.bind(window),
