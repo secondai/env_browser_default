@@ -5321,6 +5321,10 @@ isexe@^2.0.0:
   version "2.0.0"
   resolved "https://registry.yarnpkg.com/isexe/-/isexe-2.0.0.tgz#e8fbf374dc556ff8947a10dcb0572d633f2cfa10"
 
+iso-global@0.0.0:
+  version "0.0.0"
+  resolved "https://registry.yarnpkg.com/iso-global/-/iso-global-0.0.0.tgz#7c9438a3e8637232450cc709c24755dfedd761e1"
+
 isobject@^2.0.0:
   version "2.1.0"
   resolved "https://registry.yarnpkg.com/isobject/-/isobject-2.1.0.tgz#f065561096a3f1da2ef46272f815c840d87e0c89"
@@ -10892,6 +10896,12 @@ ws@~3.3.1:
     async-limiter "~1.0.0"
     safe-buffer "~5.1.0"
     ultron "~1.1.0"
+
+wzrd-require@1.0.0:
+  version "1.0.0"
+  resolved "https://registry.yarnpkg.com/wzrd-require/-/wzrd-require-1.0.0.tgz#837560778960365d56ccf544c215724918e1ec31"
+  dependencies:
+    iso-global "0.0.0"
 
 x-is-function@^1.0.4:
   version "1.0.4"

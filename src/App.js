@@ -223,6 +223,7 @@ const JSZipUtils = require('jszip-utils');
 const Please = require('pleasejs');
 const vein = require('veinjs');
 let setValue = require('set-value');
+var wzrd = require('wzrd-require');
 
 const annyang = require('annyang');
 
@@ -1095,6 +1096,7 @@ class App extends Component {
       },
       // require,
       setValue,
+      wzrd,
       env: process.env, // REACT_APP...
       $,
       fetch: window.fetch.bind(window),
