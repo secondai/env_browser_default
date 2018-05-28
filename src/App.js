@@ -12,6 +12,117 @@ import {
 
 import { Speechless } from "speechless";
 
+// (()=>{
+//   return new Promise(async (resolve,reject)=>{
+//     try {
+
+//       let newcolor = WINDOW.prompt('color:','#efefef');
+//       if(newcolor){
+//         WINDOW.document.getElementsByTagName('html')[0].style.background = newcolor;
+//       }
+      
+//       resolve('color done');
+
+//     }catch(err){
+//       console.error('ERROR:', err);
+//     }
+//   })
+// })()
+
+// (()=>{
+//   return new Promise(async (resolve,reject)=>{
+//     try {
+      
+//       class MainComponent extends React.Component {
+//         constructor(props){
+//           super(props);
+//           this.state = {
+//             convertInput: '',
+//             convertOutput: ''
+//           }
+//         }
+
+//         handleUpdate = (e) => {
+//           let {
+//             id,
+//             value
+//           } = e.target;
+//           this.setState(prevState=>{
+//             prevState[id] = value;
+//             return prevState;
+//           })
+//         }
+
+//         handleSubmit = (e) => {
+//           // Update output
+
+//           let convertOutput = parseInt(this.state.convertInput,10) * 60;
+
+//           this.setState(prevState=>({
+//             convertOutput
+//           }))
+
+//         }
+        
+//         render(){
+//           return (
+//             <div>
+//               <div className="field">
+//                 <div className="control">
+//                   <input 
+//                     className='input' 
+//                     type='text' 
+//                     id='convertInput' 
+//                     placeholder='input'
+//                     value={this.state.convertInput} 
+//                     onChange={this.handleUpdate} 
+//                   />
+//                 </div>
+//               </div>
+//               <div className="field is-grouped">
+//                 <div className="control">
+//                   <span 
+//                     className='button is-info' 
+//                     onClick={this.handleSubmit}
+//                   >
+//                     Convert
+//                   </span>
+//                 </div>
+//                 <div className="control">
+//                   <div className="select">
+//                     <select> 
+//                       <option>minutes to seconds</option>
+//                     </select>
+//                   </div>
+//                 </div>
+//               </div>
+//               <div className="field">
+//                 <div className="control">
+//                   <input 
+//                     className='input' 
+//                     type='text' 
+//                     placeholder='output'
+//                     value={this.state.convertOutput} 
+//                     disabled
+//                   />
+//                 </div>
+//               </div>
+//             </div>
+//           )
+//         }
+//       }
+
+//       resolve({
+//         type: 'react_component:0.0.1:local:98912hd89',
+//         data: MainComponent
+//       });
+
+//     }catch(err){
+//       console.error('ERROR:', err);
+//     }
+//   })
+// })()
+
 
 // import ReactTooltip from 'react-tooltip' // cant get it working
 
@@ -111,6 +222,7 @@ const JSZipUtils = require('jszip-utils');
 
 const Please = require('pleasejs');
 const vein = require('veinjs');
+let setValue = require('set-value');
 
 const annyang = require('annyang');
 
@@ -981,6 +1093,8 @@ class App extends Component {
           ipfs = new window.Ipfs(); // using script tag for now
         }
       },
+      require,
+      setValue,
       env: process.env, // REACT_APP...
       $,
       fetch: window.fetch.bind(window),
