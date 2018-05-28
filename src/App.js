@@ -2087,6 +2087,8 @@ class App extends Component {
       }
     }
 
+    window.UNIVERSE = universe;
+
     return new Promise(async (resolve, reject)=>{
       try {
 
