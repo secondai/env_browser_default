@@ -1093,7 +1093,7 @@ class App extends Component {
           ipfs = new window.Ipfs(); // using script tag for now
         }
       },
-      require,
+      // require,
       setValue,
       env: process.env, // REACT_APP...
       $,
