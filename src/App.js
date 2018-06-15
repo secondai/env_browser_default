@@ -173,7 +173,7 @@ import brace from 'brace';
 import AceEditor from 'react-ace';
 import 'brace/mode/jsx';
 import 'brace/mode/javascript';
-import 'brace/snippets/javascript';
+// import 'brace/snippets/javascript'; // makes unnecessary ajax request 
 import 'brace/theme/github';
 import 'brace/theme/monokai';
 import 'brace/ext/language_tools';
