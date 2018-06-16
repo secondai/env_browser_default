@@ -185,6 +185,8 @@ const socketio = require('socket.io-client');
 
 window.localforage = localforage;
 
+window.socketioClients = {};
+
 let baseChainUrl = 'https://api.getasecond.com';
 let redirectToRoot = false;
 
@@ -1100,6 +1102,7 @@ class App extends Component {
       setValue,
       wzrd,
       socketio,
+      socketioClients: window.socketioClients,
       env: process.env, // REACT_APP...
       $,
       fetch: window.fetch.bind(window),
