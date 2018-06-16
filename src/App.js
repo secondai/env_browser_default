@@ -1686,7 +1686,7 @@ class Request {
 
         // socketio request/response 
         console.log('Responding via socketio instead of httpResponse (came in as socketio request)');
-        console.log('clientId:', requestCache.wsClientId);
+        console.log('clientId:', this.requestCache.wsClientId);
         
         responseFunc(data);
 
