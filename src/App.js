@@ -181,7 +181,7 @@ import 'brace/ext/searchbox';
 
 import GitHub from 'github-api';
 
-const socketioClient = require('socket.io-client');
+let socketioClient = require('socket.io-client');
 
 window.localforage = localforage;
 
