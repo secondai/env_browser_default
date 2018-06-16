@@ -489,7 +489,7 @@ class Request {
     // - and a valid "requestId" 
 
     // wait for memory to be ready!
-    return new Promise((resolve, reject)=>{
+    return new Promise(async (resolve, reject)=>{
 
     
       console.log('Running browser request (inside new Request):', InputNode); //, this.state.nodesDb);
