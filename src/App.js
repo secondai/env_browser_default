@@ -181,11 +181,11 @@ import 'brace/ext/searchbox';
 
 import GitHub from 'github-api';
 
-const socketio = require('socket.io-client');
+const socketioClient = require('socket.io-client');
 
 window.localforage = localforage;
 
-window.socketioClients = {};
+window.socketioServers = {};
 
 let baseChainUrl = 'https://api.getasecond.com';
 let redirectToRoot = false;
@@ -1101,8 +1101,8 @@ class App extends Component {
       // require,
       setValue,
       wzrd,
-      socketio,
-      socketioClients: window.socketioClients,
+      socketioClient,
+      socketioServers: window.socketioServers,
       env: process.env, // REACT_APP...
       $,
       fetch: window.fetch.bind(window),
