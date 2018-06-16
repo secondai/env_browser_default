@@ -453,7 +453,6 @@ class StartupNodeComponent extends React.Component {
 
 class Request {
   constructor(opts){
-    super(opts)
     this.requestCache = {
       keyvalue: {},
       stack: [],
