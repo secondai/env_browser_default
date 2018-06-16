@@ -183,9 +183,11 @@ import GitHub from 'github-api';
 
 let socketioClient = require('socket.io-client');
 
-window.localforage = localforage;
-
 window.socketioServers = {};
+
+let RouteParser = require('route-parser');
+
+window.localforage = localforage;
 
 let baseChainUrl = 'https://api.getasecond.com';
 let redirectToRoot = false;
@@ -449,599 +451,144 @@ class StartupNodeComponent extends React.Component {
   }
 }
 
+class Request {
+  constructor(opts){
+    super(opts)
+    this.requestCache = {
+      keyvalue: {},
+      stack: [],
+      res: null, //resObj,
+      req: null, //reqObj,
+      wsClientId: opts.wsClientId,
+      socketioResponseFunc: opts.socketioResponseFunc
+    };
+    this.requestId = opts.requestId;
 
-class App extends Component {
-  constructor(props){
-    super(props);
-    // this.queue = queue();
-    this.secondReady = new Promise(resolve=>{
-      this.secondReadyResolve = resolve;
-    });
+    this.runRequest = opts.runRequest; // websocket requests 
+    this.insertNode = opts.insertNode;
+    this.updateNode = opts.updateNode;
+    this.removeNode = opts.removeNode;
+    this.fetchNodes = opts.fetchNodes;
+    this.handleLoadApp = opts.handleLoadApp;
+    this.handleCreateNewSecondFromNodes = opts.handleCreateNewSecondFromNodes;
+    this.startSecond = opts.startSecond;
+    this.state = opts.state;
+    this.setState = opts.setState;
+    this.makeUpdate = opts.makeUpdate;
 
-    this.state = {
-      // user: user
-      capabilities: null, // turns into a function, or is a list of current capabilities?  (Load, then Use capability?)
-      startupNode: null, // gets populared on secondReady 
-      basicKey: 'developer',
-      storageKey: null,
-      choosing: true,
-      localAppsList: [], // array of objects: { storageKey: String, basicKey: BASIC_NODE_TYPE }
-      storedAppsList: {},
-      useLocalforage: false,
-      useLocalZip: false,
-      nodesDb: [], // empty at first, will load from indexDb (localForage) 
-      startupName: window.startupName || '',
-      startupZipUrl: '',
-      appVersion: window.limitedToAppVersion || 1
-    }
-
-  }
-
-  componentWillReceiveProps(nextProps){
-
-  }
-
-  componentDidMount(){
-    console.log('componentDidMount');
-
-    this.loadLocalApps()
-    .then(this.autolaunch);
-
-
-    // listen for storage changes
-    $(window).on('storage', this.receivedMessage);
-
-    // // fetch initial storage
-    // // - then startSecond 
-    // if(NEW_MEMORY_ON_REFRESH){
-    //   this.startSecond();
-    // } else {
-    //   this.fetchLatestDb()
-    //   .then(()=>{
-    //     this.startSecond();
-    //   })
-    // }
-
+    this.run(opts.InputNode, opts.skipWrappingInputNode);
   }
 
   @autobind
-  autolaunch(){
-    // launches lastApp automatically 
-    // - after a slight delay in order to skip and go back to the Launcher
-    //   - could also have a global keycode? 
-    //   - or launching a new tab causes the Launcher to display 
-
-    let localApps = this.state.localAppsList || [];
-
-    console.log('LocalApps:', localApps);
-
-    // automatically loads the LAST matching server-specified appId 
-    // - TODO: make less brittle 
-
-    if(window.name || window.useLastOfAppId){
-
-      console.log('checking window.name or window.useLastOfAppId');
-
-      let existing;
-      if(window.name){
-        console.log('checking for window.name:', window.name);
-        existing = localApps.find(a=>{
-          return a.storageKey == window.name;
-        });
-        if(existing){
-          console.log('window.name has existing app to launch', existing);
-        }
-      }
-      if(window.useLastOfAppId){
-        // expecting to launch only a certain type of app (default to it, at least) 
-        console.log('checking for useLastOfAppId:', window.useLastOfAppId);
-        // already found?
-        if(existing){ // && existing.appId == window.useLastOfAppId){
-          // window.name matched, see if appId matches for that app 
-          if(existing.appId == window.useLastOfAppId){
-            // good to re-launch app! 
-            // - TODO: verify not duplicate running in separate window, sharing database on accident? (do in-app?) 
-            console.log('good to launch app!');
-          } else {
-            // window.name didn't match type of app
-            // - search for latest of that type of app 
-            console.log('window.name didnt match type of app!');
-            existing = localApps.reverse().find(a=>{
-              return a.appId == window.useLastOfAppId;
-            });
-          }
-
-        } else {
-          // window.name empty (no last running app in window) 
-          // - find existing app instance to run (TODO: unless app is defined as run-separate-instances) 
-          console.log('window.name empty (no last running app in window)');
-          existing = localApps.reverse().find(a=>{
-            return a.appId == window.useLastOfAppId;
-          });
-        }
-
-        if(existing && existing.version != this.state.appVersion){
-          console.log('existing.version != this.state.appVersion, launching NEW', existing.version, this.state.appVersion);
-          existing = null;
-        }
-
-      }
-
-      console.log('existing1', existing);
-
-
-      if(existing){
-        // find app and autolaunch
-        console.log('Starting autolaunch of previous', window.name, existing);
-
-        this.setState({
-          autolaunching: true,
-          autolaunchName: `${existing.name}`
-        });
-
-        window.setTimeout(()=>{
-          if(this.state.autolaunching){
-
-            // find app and autolaunch
-            console.log('Launch initiated after no cancel');
-
-            this.handleUseExisting(existing);
-            this.setState({
-              autolaunching: false
-            });
-
-          }
-
-        },2000);
-
-        this.setState({
-          initialLoad: true
-        });
-
-        return;
-
-
-      } else {
-        console.log('Unable to find existing, even though specified/expecting');
-      }
-
-
-    } 
-
-    // Launch Default / App Store immediately 
-    // - uses startupZipUrl 
-    //   - TODO: bundle, prevent tons of zip downloads via corseverywhere.com 
-
-    if(this.state.startupZipUrl){
-
-      console.log('Starting autolaunch (default app, App Store)!');
-
-      this.setState({
-        autolaunching: true,
-        autolaunchName: window.limitedToAppName  || `App Store`,
-        startupName: window.limitedToAppName || 'Default App Store' // required for launching via handleCreateNewSecondFromRemoteZip
-      });
-
-      let startupDelay = window.startupDelay || 2000;
-
-      window.setTimeout(()=>{
-        if(this.state.autolaunching){
-
-          // find app and autolaunch
-          console.log('Launch initiated after no cancel');
-
-
-          this.handleCreateNewSecondFromRemoteZip();
-          this.setState({
-            autolaunching: false
-          });
-
-        }
-
-      },startupDelay);
-
-    } else {
-      console.log('Missing startupZipUrl');
-    }
-
-
-    this.setState({
-      initialLoad: true
-    });
-
-  }
-
-  @autobind
-  async loadLocalApps(){
-
-    let promises = [];
-
-    promises.push(new Promise((resolve,reject)=>{
-
-      // "running" apps 
-      localforage.getItem(SECOND_LIST_OF_LOCAL_APPS)
-      .then(localAppsList=>{
-        localAppsList = localAppsList || [];
-        this.setState({
-          localAppsList
-        }, resolve)
-      })
-
-    }));
-
-
-    promises.push(new Promise((resolve,reject)=>{
-
-      // apps stored in memory by a Second 
-      localforage.getItem('possible-ui-apps')
-      .then(storedAppsList=>{
-        console.log('found possible-ui-apps');
-        storedAppsList = storedAppsList || {};
-        this.setState({
-          storedAppsList
-        },resolve)
-      })
-
-    }));
-
-    promises.push(new Promise((resolve,reject)=>{
-
-      // beginning github url 
-      localforage.getItem('last-startup-zip-url')
-      .then(startupZipUrl=>{
-        console.log('found startupZipUrl:', startupZipUrl);
-        startupZipUrl = startupZipUrl || process.env.REACT_APP_STARTUP_GITHUB_BUNDLE || '';
-        if(window.limitedToAppZip && window.limitedToAppZip != startupZipUrl){
-          startupZipUrl = window.limitedToAppZip;
-        }
-        console.log('setting startupZipUrl', startupZipUrl);
-        this.setState({
-          startupZipUrl
-        },resolve)
-      })
-
-    }));
-
-
-    await Promise.all(promises);
-
-    return true;
-
-  }
-
-  @autobind
-  startSecond(){
-
-    return new Promise(async (resolve, reject)=>{
-
-      console.log('Second ready');
-
-      // let Second start processing queue of items 
-      this.secondReadyResolve();
-
-      // If there is no db, then we need to start learning! (populate db a bit) 
-      if(!this.state.nodesDb.length){
-        console.log('Learning basics2');
-        await this.learnBasics();
-
-        // // Get ExternalIdentity Node for next request 
-        // // - storing internally, then removing and re-adding in the "learn" step 
-        // let nodes = await this.fetchNodes({
-        //   type: 'external_identity:0.0.1:local:8982f982j92'
-        // });
-
-        // let startupExternalIdentityNode;
-
-        // // NOT required to have a startup node (asks for "words"!) 
-        // if(nodes.length){
-        //   startupExternalIdentityNode = nodes[0];
-        //   // console.error('Missing ExternalIdentity on startup!');
-        //   // return false;
-        // }
-
-        // // run "first" action
-        // // - in theory this is for seeding/setup 
-        // // - we want a UI for setup tho, so kinda skipping this now 
-        // let firstResponse = await this.runRequest({
-        //   type: 'incoming_first:0.1.1:local:78882h37',
-        //   data: startupExternalIdentityNode
-        // }, true)
-
-        // console.log('firstResponse', firstResponse);
-
-      }
-
-      // reload page if a new app is launching 
-      if(redirectToRoot){
-        return window.location = '/';
-      }
-
-      console.log('Running startup!');
-      console.log('current memory:', this.state.nodesDb);
-
-      // init 
-      this.runRequest({
-        type: 'browser_startup:0.0.1:local:8831167ssd', // loads the initial react component (MainComponent or SetupComponent) 
-        data: null
-      })
-      .then(response=>{
-        console.log('Response from browser_startup:', response);
-        if(response.type == 'react_component:0.0.1:local:98912hd89'){
-          this.setState({
-            startupNode: response.data
-          })
-        } else {
-          // Display error output 
-          try {
-            this.setState({
-              startupNode: newErrorOutput(response.data.err.message)
-            })
-          }catch(err){
-            console.error('Invalid error output received');
-            this.setState({
-              startupNode: newErrorOutput(response)
-            })
-          }
-        }
-      })
-
-    });
-
-    // // clear?
-    // this.makeUpdate([]);
-
-  }
-
-  @autobind
-  learnBasics(){
-
-    return new Promise(async (resolve,reject)=>{
-
-      console.log('learnBasics started');
-
-      // console.log('BASICS:', BASIC_NODES);
-
-      if(USE_OLD_START){
-
-        let nodesToLearn = [];
-
-        let id1 = uuidv4();
-        let externalId1 = uuidv4();
-
-        // Request Handler 
-        nodesToLearn.push({
-          _id: id1,
-          nodeId: null,
-          type: 'incoming_from_universe:0.0.1:local:298fj293',
-          data: {}
-        })
-
-        // Code for request handler
-        nodesToLearn.push({
-          nodeId: id1,
-          type: 'code:0.0.1:local:32498h32f2',
-          data: CODENODE
-          // {
-          //   "code": "(()=>{\n  return new Promise(async (resolve,reject)=>{\n    try {\n      \n      resolve({\n        browser: 'ok',\n        INPUT,\n        SELF\n      });\n      \n    }catch(err){\n      resolve({ERROR: true, err: err.toString()});\n    }\n    \n  })\n\n  \n})()"
-          // }
-        })
-
-        // External Identity
-        nodesToLearn.push({
-          _id: externalId1,
-          nodeId: null,
-          type: 'external_identity:0.0.1:local:8982f982j92',
-          data: {
-            publicKey: '-----BEGIN PUBLIC KEY-----\nMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAjLaSkRwS1kFemGs6xMjp\nyDOriloc8oBcd8ITt8tjsbvoToSM7DSyT68Mga1tjFBdxQkg/nseedTjW180nAKu\nbWliSvoDKTILzkE/eNxtNbuSNN715r5M/b/smkTPPb7Qer1Yva7EkN0T3fIIrrZP\ntPwX2fyJe04D/qKlS0bVdanR0iAdRAuHWhzznPszluwiKJItazZuAHkS0If7O+LA\nmwKYpUq9GzapkAujs08e+vVK5N34t9jghbhVR8LweuCUwWoOItvDLSOjfkWpTwqc\nutT7xqwcu+muPEm2zASdp65UraSmo91AZJOX8WohUPi4+UD9OoBNsHlq0sKrQiA7\n2QIDAQAB\n-----END PUBLIC KEY-----'
-          }
-        })
-        nodesToLearn.push({
-          nodeId: externalId1,
-          type: 'external_identity_connect_method:0.0.1:local:382989239hsdfmn',
-          data: {
-            "connection": "http://localhost:7001/ai",
-            "method": "http"
-          }
-        })
-
-        for(let node of nodesToLearn){
-          await this.insertNode(node);
-        }
-
-
-        return resolve();
-
-      }
-
-
-
-      // Use SetupNodes (current) 
-
-
-      const saveChildNodes = (nodeId, childNodes) => {
-        return new Promise(async (resolve, reject)=>{
-
-          console.log('Saving children');
-          
-          for(let tmpNode of childNodes){
-            let newChildNode = {
-              name: tmpNode.name, 
-              nodeId,
-              type: tmpNode.type,
-              data: tmpNode.data,
-            }
-            let savedChildNode = await this.insertNode(newChildNode);
-            console.log('savedChildNode', savedChildNode);
-            if(tmpNode.nodes && tmpNode.nodes.length){
-
-              await saveChildNodes(savedChildNode._id, tmpNode.nodes);
-
-            }
-          }
-          resolve();
-        });
-      }
-
-
-      let startNodes;
-
-      // Use localForage or on-disk?
-      if(this.state.useLocalforage){
-        console.log('using LOCALFORAGE-stored ui app!');
-        startNodes = this.state.storedAppsList[this.state.basicKey];
-      } else if(this.state.useLocalZip) {
-        console.log('using ZipNodes for ui app');
-        startNodes = ZipNodes;
-      } else {
-        console.log('using ON-DISK -stored ui app!');
-        startNodes = BASIC_NODES[this.state.basicKey];
-      }
-
-      console.log('StartNodes:', startNodes);
-      // return false;
-
-
-      for(let node of startNodes){
-        await this.insertNode(node);
-        await saveChildNodes(node._id, node.nodes);
-      }
-
-      console.log('Basics learned!');
-      resolve();
-
-    });
-
-  }
-
-  @autobind
-  runRequest(InputNode, skipWrappingInputNode){
+  run(InputNode, skipWrappingInputNode){
     // Run the passed-in Node 
     // - use the default type:"incoming_from_universe:0.0.1:local:298fj293"
 
     // runs in VM 
     // - with "universe" context 
+    // - and a valid "requestId" 
 
     // wait for memory to be ready!
     return new Promise((resolve, reject)=>{
 
-      this.secondReady.then(async ()=>{
-        console.log('Running browser request:', InputNode); //, this.state.nodesDb);
+    
+      console.log('Running browser request (inside new Request):', InputNode); //, this.state.nodesDb);
 
-        // fetch and run code, pass in 
-        let nodes;
-        let nodeId;
-        let CodeNode;
+      // fetch and run code, pass in 
+      let nodes;
+      let nodeId;
+      let CodeNode;
 
 
-        // // console.log('NODES:', nodes);
-        if(1==0){
-          // Old way (at root, no "app" concept) 
-          nodes = await this.fetchNodes({
-            nodeId: null, // get top-level only! 
-            type: 'incoming_from_universe:0.0.1:local:298fj293'
-          });
 
-          // if(!nodes || !nodes.length){
-          //   console.error('Missing incoming_from_universe:0.0.1:local:298fj293 Node');
-          //   return;
-          // }
+      // new way, as "part of an app" (TODO: finish "inside this app" logic) 
 
-          // let foundIncomingNode = nodes[0];
-          nodeId = nodes[0]._id;
+      // get launch code for default app in memory 
+      nodes = await this.fetchNodes({
+        // type: 'incoming_from_universe:0.0.1:local:298fj293'
+        type: 'incoming_from_uni:Qmsldfj2f'
+      });
 
-          CodeNode = lodash.find(nodes[0].nodes,{type: 'code:0.0.1:local:32498h32f2'});
+      // find correct node for appId
+      console.log('NODES matching incoming_from_uni:Qmsldfj2f:', nodes.length, nodes);
 
-        } else {
-
-          // new way, as "part of an app" (TODO: finish "inside this app" logic) 
-
-          // get launch code for default app in memory 
-          nodes = await this.fetchNodes({
-            type: 'incoming_from_universe:0.0.1:local:298fj293'
-          });
-
-          // find correct node for appId
-          console.log('NODES matching incoming_from_universe:', nodes.length, nodes);
-
-          let foundIncomingNode = nodes.find(node=>{
-            // let node2 = JSON.parse(JSON.stringify(node));
-            // delete node2.data;
-            // node2.nodes = (node2.nodes || []).map(n=>{
-            //   delete n.data;
-            //   return n;
-            // });
-            // console.log('NODE2:', node2.parent ? node2.parent.type:null); //, JSON.stringify(node2,null,2));
-            try {
-              let parent = node.parent;
-              if(parent.type.split(':')[0] != 'platform_nodes' || parent.data.platform != 'browser'){
-                return false;
-              }
-              let appbaseParent = parent.parent;
-              if(appbaseParent.type.split(':')[0] == 'app_base' && 
-                // appbaseParent.data.appId == (process.env.DEFAULT_LAUNCH_APPID || 'a22a4864-773d-4b0b-bf69-0b2c0bc7f3e0') &&
-                // app to use? assuming only a single frontend app (TODO: multiple!) 
-                appbaseParent.data.release == 'production'
-                ){
-                // console.log('FOUND!');
-                return true;
-              }
-            }catch(err){}
-            return false;
-          });
-          
-          if(!foundIncomingNode){
-            console.error('Missing foundIncomingNode');
-            return false;
-          }
-
-          // console.log('incoming_from_universe:0.0.1:local:298fj293 Node:', foundIncomingNode ? true:false, foundIncomingNode.parent.type, foundIncomingNode.parent.data);
-
-          // let foundIncomingNode = nodes[0];
-          nodeId = foundIncomingNode._id;
-
-          CodeNode = lodash.find(foundIncomingNode.nodes,{type: 'code:0.0.1:local:32498h32f2'});
-
-        }
-
-        if(!CodeNode){
-          console.error('Missing code:0.0.1:local:32498h32f2 to handle incoming_browser_request');
-          return;
-        }
-
-        let UniverseInputNode = {};
-
-        if(skipWrappingInputNode){
-          UniverseInputNode = InputNode;
-        } else {
-          UniverseInputNode = {
-            type: 'incoming_browser_request:0.0.1:local:829329329f832',
-            data: InputNode
-          }
-        }
-
-        console.log('UniverseInputNode',UniverseInputNode);
-        console.log('CodeNode',CodeNode);
-
-        // run in vm
-        let responseNode;
+      let foundIncomingNode = nodes.find(node=>{
+        // let node2 = JSON.parse(JSON.stringify(node));
+        // delete node2.data;
+        // node2.nodes = (node2.nodes || []).map(n=>{
+        //   delete n.data;
+        //   return n;
+        // });
+        // console.log('NODE2:', node2.parent ? node2.parent.type:null); //, JSON.stringify(node2,null,2));
         try {
-          responseNode = await this.createAndRunVM(CodeNode, UniverseInputNode);
-        }catch(err){
-          console.error('In VM error:', err);
-          responseNode = {
-            type: 'err_in_vm:3',
-            data: {
-              err: err || {},
-              error: err
-            }
+          let parent = node.parent;
+          if(parent.type.split(':')[0] != 'platform_nodes' || parent.data.platform != 'browser'){
+            return false;
+          }
+          let appbaseParent = parent.parent;
+          if(appbaseParent.type.split(':')[0] == 'app_base' && 
+            // appbaseParent.data.appId == (process.env.DEFAULT_LAUNCH_APPID || 'a22a4864-773d-4b0b-bf69-0b2c0bc7f3e0') &&
+            // app to use? assuming only a single frontend app (TODO: multiple!) 
+            appbaseParent.data.release == 'production'
+            ){
+            // console.log('FOUND!');
+            return true;
+          }
+        }catch(err){}
+        return false;
+      });
+      
+      if(!foundIncomingNode){
+        console.error('Missing foundIncomingNode');
+        return false;
+      }
+
+      // console.log('incoming_from_universe:0.0.1:local:298fj293 Node:', foundIncomingNode ? true:false, foundIncomingNode.parent.type, foundIncomingNode.parent.data);
+
+      // let foundIncomingNode = nodes[0];
+      nodeId = foundIncomingNode._id;
+
+      CodeNode = lodash.find(foundIncomingNode.nodes,{type: 'code:0.0.1:local:32498h32f2'});
+
+      if(!CodeNode){
+        console.error('Missing code:0.0.1:local:32498h32f2 to handle incoming_browser_request');
+        return;
+      }
+
+      let UniverseInputNode = {};
+
+      if(skipWrappingInputNode){
+        UniverseInputNode = InputNode;
+      } else {
+        UniverseInputNode = {
+          type: 'incoming_browser_request:0.0.1:local:829329329f832',
+          data: InputNode
+        }
+      }
+
+      console.log('UniverseInputNode',UniverseInputNode);
+      console.log('CodeNode',CodeNode);
+
+      // run in vm
+      let responseNode;
+      try {
+        responseNode = await this.createAndRunVM(CodeNode, UniverseInputNode);
+      }catch(err){
+        console.error('In VM error:', err);
+        responseNode = {
+          type: 'err_in_vm:3',
+          data: {
+            err: err || {},
+            error: err
           }
         }
+      }
 
-        console.log('ResponseNode:', CodeNode._id, CodeNode.type, responseNode);
+      console.log('ResponseNode:', CodeNode._id, CodeNode.type, responseNode);
 
-        resolve(responseNode);
+      resolve(responseNode);
 
-      })
+      
 
     });
 
@@ -1093,6 +640,7 @@ class App extends Component {
 
     let universe = {
       // React, // React.Component is available 
+      runRequest: this.runRequest, // new Request, for startup and Websockets 
       enableIpfs: ()=>{
         if(!ipfs){
           ipfs = new window.Ipfs(); // using script tag for now
@@ -2092,8 +1640,70 @@ class App extends Component {
 
         });
         
-      }
+      },
+
+      getParentRoot: (node)=>{
+        // get the root of a node (follow parents) 
+        // - parent probably doesnt have the full chain filled out (TODO: node.nodes().xyz) 
+        function getParentNodes(node){
+          let nodes = [node];
+          if(node.parent){
+            nodes = nodes.concat(getParentNodes(node.parent));
+          }
+          return nodes;
+        }
+        
+        let parentNodes1 = getParentNodes(node);
+        return parentNodes1[parentNodes1.length - 1];
+
+      },
+
+      RouteParser,
+
+      setRequestCacheKeyValue:  (key, value)=>{
+        return new Promise((resolve,reject)=>{
+          this.requestCache.keyvalue[key] = value;
+          resolve(this.requestCache);
+        })
+      },
+
+      getRequestCache:  (opts)=>{
+        return new Promise((resolve,reject)=>{
+          resolve(this.requestCache);
+        })
+      },
+      
+      sleep: (ms)=>{
+        return new Promise((resolve,reject)=>{
+          setTimeout(resolve,ms)
+        })
+      },
+
+      httpResponse: (action, data)=>{
+        return new Promise((resolve,reject)=>{
+          // only a websocket response will actually be used 
+
+        let responseFunc = this.requestCache.socketioResponseFunc;
+
+        // socketio request/response 
+        console.log('Responding via socketio instead of httpResponse (came in as socketio request)');
+        console.log('clientId:', requestCache.wsClientId);
+        
+        responseFunc(data);
+
+
+        })
+      },
+
+      httpSession: (action, data)=>{
+        return new Promise((resolve,reject)=>{
+          // not available on browser 
+          console.error('httpSession not setup for browser');
+        })
+      },
+
     }
+    // END universe
 
     window.UNIVERSE = universe;
 
@@ -2191,6 +1801,512 @@ class App extends Component {
             // await localforage.getItem(codeHash)
 
     });
+  }
+
+}
+
+
+class App extends Component {
+  constructor(props){
+    super(props);
+    // this.queue = queue();
+    this.secondReady = new Promise(resolve=>{
+      this.secondReadyResolve = resolve;
+    });
+
+    this.state = {
+      // user: user
+      capabilities: null, // turns into a function, or is a list of current capabilities?  (Load, then Use capability?)
+      startupNode: null, // gets populared on secondReady 
+      basicKey: 'developer',
+      storageKey: null,
+      choosing: true,
+      localAppsList: [], // array of objects: { storageKey: String, basicKey: BASIC_NODE_TYPE }
+      storedAppsList: {},
+      useLocalforage: false,
+      useLocalZip: false,
+      nodesDb: [], // empty at first, will load from indexDb (localForage) 
+      startupName: window.startupName || '',
+      startupZipUrl: '',
+      appVersion: window.limitedToAppVersion || 1
+    }
+
+  }
+
+  componentWillReceiveProps(nextProps){
+
+  }
+
+  componentDidMount(){
+    console.log('componentDidMount');
+
+    this.loadLocalApps()
+    .then(this.autolaunch);
+
+
+    // listen for storage changes
+    $(window).on('storage', this.receivedMessage);
+
+    // // fetch initial storage
+    // // - then startSecond 
+    // if(NEW_MEMORY_ON_REFRESH){
+    //   this.startSecond();
+    // } else {
+    //   this.fetchLatestDb()
+    //   .then(()=>{
+    //     this.startSecond();
+    //   })
+    // }
+
+  }
+
+  @autobind
+  autolaunch(){
+    // launches lastApp automatically 
+    // - after a slight delay in order to skip and go back to the Launcher
+    //   - could also have a global keycode? 
+    //   - or launching a new tab causes the Launcher to display 
+
+    let localApps = this.state.localAppsList || [];
+
+    console.log('LocalApps:', localApps);
+
+    // automatically loads the LAST matching server-specified appId 
+    // - TODO: make less brittle 
+
+    if(window.name || window.useLastOfAppId){
+
+      console.log('checking window.name or window.useLastOfAppId');
+
+      let existing;
+      if(window.name){
+        console.log('checking for window.name:', window.name);
+        existing = localApps.find(a=>{
+          return a.storageKey == window.name;
+        });
+        if(existing){
+          console.log('window.name has existing app to launch', existing);
+        }
+      }
+      if(window.useLastOfAppId){
+        // expecting to launch only a certain type of app (default to it, at least) 
+        console.log('checking for useLastOfAppId:', window.useLastOfAppId);
+        // already found?
+        if(existing){ // && existing.appId == window.useLastOfAppId){
+          // window.name matched, see if appId matches for that app 
+          if(existing.appId == window.useLastOfAppId){
+            // good to re-launch app! 
+            // - TODO: verify not duplicate running in separate window, sharing database on accident? (do in-app?) 
+            console.log('good to launch app!');
+          } else {
+            // window.name didn't match type of app
+            // - search for latest of that type of app 
+            console.log('window.name didnt match type of app!');
+            existing = localApps.reverse().find(a=>{
+              return a.appId == window.useLastOfAppId;
+            });
+          }
+
+        } else {
+          // window.name empty (no last running app in window) 
+          // - find existing app instance to run (TODO: unless app is defined as run-separate-instances) 
+          console.log('window.name empty (no last running app in window)');
+          existing = localApps.reverse().find(a=>{
+            return a.appId == window.useLastOfAppId;
+          });
+        }
+
+        if(existing && existing.version != this.state.appVersion){
+          console.log('existing.version != this.state.appVersion, launching NEW', existing.version, this.state.appVersion);
+          existing = null;
+        }
+
+      }
+
+      console.log('existing1', existing);
+
+
+      if(existing){
+        // find app and autolaunch
+        console.log('Starting autolaunch of previous', window.name, existing);
+
+        this.setState({
+          autolaunching: true,
+          autolaunchName: `${existing.name}`
+        });
+
+        window.setTimeout(()=>{
+          if(this.state.autolaunching){
+
+            // find app and autolaunch
+            console.log('Launch initiated after no cancel');
+
+            this.handleUseExisting(existing);
+            this.setState({
+              autolaunching: false
+            });
+
+          }
+
+        },2000);
+
+        this.setState({
+          initialLoad: true
+        });
+
+        return;
+
+
+      } else {
+        console.log('Unable to find existing, even though specified/expecting');
+      }
+
+
+    } 
+
+    // Launch Default / App Store immediately 
+    // - uses startupZipUrl 
+    //   - TODO: bundle, prevent tons of zip downloads via corseverywhere.com 
+
+    if(this.state.startupZipUrl){
+
+      console.log('Starting autolaunch (default app, App Store)!');
+
+      this.setState({
+        autolaunching: true,
+        autolaunchName: window.limitedToAppName  || `App Store`,
+        startupName: window.limitedToAppName || 'Default App Store' // required for launching via handleCreateNewSecondFromRemoteZip
+      });
+
+      let startupDelay = window.startupDelay || 2000;
+
+      window.setTimeout(()=>{
+        if(this.state.autolaunching){
+
+          // find app and autolaunch
+          console.log('Launch initiated after no cancel');
+
+
+          this.handleCreateNewSecondFromRemoteZip();
+          this.setState({
+            autolaunching: false
+          });
+
+        }
+
+      },startupDelay);
+
+    } else {
+      console.log('Missing startupZipUrl');
+    }
+
+
+    this.setState({
+      initialLoad: true
+    });
+
+  }
+
+  @autobind
+  async loadLocalApps(){
+
+    let promises = [];
+
+    promises.push(new Promise((resolve,reject)=>{
+
+      // "running" apps 
+      localforage.getItem(SECOND_LIST_OF_LOCAL_APPS)
+      .then(localAppsList=>{
+        localAppsList = localAppsList || [];
+        this.setState({
+          localAppsList
+        }, resolve)
+      })
+
+    }));
+
+
+    promises.push(new Promise((resolve,reject)=>{
+
+      // apps stored in memory by a Second 
+      localforage.getItem('possible-ui-apps')
+      .then(storedAppsList=>{
+        console.log('found possible-ui-apps');
+        storedAppsList = storedAppsList || {};
+        this.setState({
+          storedAppsList
+        },resolve)
+      })
+
+    }));
+
+    promises.push(new Promise((resolve,reject)=>{
+
+      // beginning github url 
+      localforage.getItem('last-startup-zip-url')
+      .then(startupZipUrl=>{
+        console.log('found startupZipUrl:', startupZipUrl);
+        startupZipUrl = startupZipUrl || process.env.REACT_APP_STARTUP_GITHUB_BUNDLE || '';
+        if(window.limitedToAppZip && window.limitedToAppZip != startupZipUrl){
+          startupZipUrl = window.limitedToAppZip;
+        }
+        console.log('setting startupZipUrl', startupZipUrl);
+        this.setState({
+          startupZipUrl
+        },resolve)
+      })
+
+    }));
+
+
+    await Promise.all(promises);
+
+    return true;
+
+  }
+
+  @autobind
+  startSecond(){
+
+    return new Promise(async (resolve, reject)=>{
+
+      console.log('Second ready');
+
+      // let Second start processing queue of items 
+      this.secondReadyResolve();
+
+      // If there is no db, then we need to start learning! (populate db a bit) 
+      if(!this.state.nodesDb.length){
+        console.log('Learning basics2');
+        await this.learnBasics();
+
+        // // Get ExternalIdentity Node for next request 
+        // // - storing internally, then removing and re-adding in the "learn" step 
+        // let nodes = await this.fetchNodes({
+        //   type: 'external_identity:0.0.1:local:8982f982j92'
+        // });
+
+        // let startupExternalIdentityNode;
+
+        // // NOT required to have a startup node (asks for "words"!) 
+        // if(nodes.length){
+        //   startupExternalIdentityNode = nodes[0];
+        //   // console.error('Missing ExternalIdentity on startup!');
+        //   // return false;
+        // }
+
+        // // run "first" action
+        // // - in theory this is for seeding/setup 
+        // // - we want a UI for setup tho, so kinda skipping this now 
+        // let firstResponse = await this.runRequest({
+        //   type: 'incoming_first:0.1.1:local:78882h37',
+        //   data: startupExternalIdentityNode
+        // }, true)
+
+        // console.log('firstResponse', firstResponse);
+
+      }
+
+      // reload page if a new app is launching 
+      if(redirectToRoot){
+        return window.location = '/';
+      }
+
+      console.log('Running startup!');
+      console.log('current memory:', this.state.nodesDb);
+
+      // init 
+      this.runRequest({
+        type: 'browser_startup:0.0.1:local:8831167ssd', // loads the initial react component (MainComponent or SetupComponent) 
+        data: null
+      })
+      .then(response=>{
+        console.log('Response from browser_startup:', response);
+        if(response.type == 'react_component:0.0.1:local:98912hd89'){
+          this.setState({
+            startupNode: response.data
+          })
+        } else {
+          // Display error output 
+          try {
+            this.setState({
+              startupNode: newErrorOutput(response.data.err.message)
+            })
+          }catch(err){
+            console.error('Invalid error output received');
+            this.setState({
+              startupNode: newErrorOutput(response)
+            })
+          }
+        }
+      })
+
+    });
+
+    // // clear?
+    // this.makeUpdate([]);
+
+  }
+
+  @autobind
+  learnBasics(){
+
+    return new Promise(async (resolve,reject)=>{
+
+      console.log('learnBasics started');
+
+      // console.log('BASICS:', BASIC_NODES);
+
+      if(USE_OLD_START){
+
+        let nodesToLearn = [];
+
+        let id1 = uuidv4();
+        let externalId1 = uuidv4();
+
+        // Request Handler 
+        nodesToLearn.push({
+          _id: id1,
+          nodeId: null,
+          type: 'incoming_from_universe:0.0.1:local:298fj293',
+          data: {}
+        })
+
+        // Code for request handler
+        nodesToLearn.push({
+          nodeId: id1,
+          type: 'code:0.0.1:local:32498h32f2',
+          data: CODENODE
+          // {
+          //   "code": "(()=>{\n  return new Promise(async (resolve,reject)=>{\n    try {\n      \n      resolve({\n        browser: 'ok',\n        INPUT,\n        SELF\n      });\n      \n    }catch(err){\n      resolve({ERROR: true, err: err.toString()});\n    }\n    \n  })\n\n  \n})()"
+          // }
+        })
+
+        // External Identity
+        nodesToLearn.push({
+          _id: externalId1,
+          nodeId: null,
+          type: 'external_identity:0.0.1:local:8982f982j92',
+          data: {
+            publicKey: '-----BEGIN PUBLIC KEY-----\nMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAjLaSkRwS1kFemGs6xMjp\nyDOriloc8oBcd8ITt8tjsbvoToSM7DSyT68Mga1tjFBdxQkg/nseedTjW180nAKu\nbWliSvoDKTILzkE/eNxtNbuSNN715r5M/b/smkTPPb7Qer1Yva7EkN0T3fIIrrZP\ntPwX2fyJe04D/qKlS0bVdanR0iAdRAuHWhzznPszluwiKJItazZuAHkS0If7O+LA\nmwKYpUq9GzapkAujs08e+vVK5N34t9jghbhVR8LweuCUwWoOItvDLSOjfkWpTwqc\nutT7xqwcu+muPEm2zASdp65UraSmo91AZJOX8WohUPi4+UD9OoBNsHlq0sKrQiA7\n2QIDAQAB\n-----END PUBLIC KEY-----'
+          }
+        })
+        nodesToLearn.push({
+          nodeId: externalId1,
+          type: 'external_identity_connect_method:0.0.1:local:382989239hsdfmn',
+          data: {
+            "connection": "http://localhost:7001/ai",
+            "method": "http"
+          }
+        })
+
+        for(let node of nodesToLearn){
+          await this.insertNode(node);
+        }
+
+
+        return resolve();
+
+      }
+
+
+
+      // Use SetupNodes (current) 
+
+
+      const saveChildNodes = (nodeId, childNodes) => {
+        return new Promise(async (resolve, reject)=>{
+
+          console.log('Saving children');
+          
+          for(let tmpNode of childNodes){
+            let newChildNode = {
+              name: tmpNode.name, 
+              nodeId,
+              type: tmpNode.type,
+              data: tmpNode.data,
+            }
+            let savedChildNode = await this.insertNode(newChildNode);
+            console.log('savedChildNode', savedChildNode);
+            if(tmpNode.nodes && tmpNode.nodes.length){
+
+              await saveChildNodes(savedChildNode._id, tmpNode.nodes);
+
+            }
+          }
+          resolve();
+        });
+      }
+
+
+      let startNodes;
+
+      // Use localForage or on-disk?
+      if(this.state.useLocalforage){
+        console.log('using LOCALFORAGE-stored ui app!');
+        startNodes = this.state.storedAppsList[this.state.basicKey];
+      } else if(this.state.useLocalZip) {
+        console.log('using ZipNodes for ui app');
+        startNodes = ZipNodes;
+      } else {
+        console.log('using ON-DISK -stored ui app!');
+        startNodes = BASIC_NODES[this.state.basicKey];
+      }
+
+      console.log('StartNodes:', startNodes);
+      // return false;
+
+
+      for(let node of startNodes){
+        await this.insertNode(node);
+        await saveChildNodes(node._id, node.nodes);
+      }
+
+      console.log('Basics learned!');
+      resolve();
+
+    });
+
+  }
+
+  @autobind
+  runRequest(InputNode, skipWrappingInputNode, wsClientId, socketioResponseFunc){
+    // Run the passed-in Node 
+    // - use the default type:"incoming_from_universe:0.0.1:local:298fj293"
+
+    // runs in VM 
+    // - with "universe" context 
+    // - and a valid "requestId" 
+
+    // wait for memory to be ready!
+    return new Promise((resolve, reject)=>{
+
+      this.secondReady.then(async ()=>{
+        console.log('Running browser request:', InputNode); //, this.state.nodesDb);
+
+        let NewRequest = new Request({
+          requestId: uuidv4(),
+          InputNode,
+          skipWrappingInputNode,
+          wsClientId,
+          socketioResponseFunc,
+
+          runRequest: this.runRequest, // self 
+          insertNode: this.insertNode,
+          updateNode: this.updateNode,
+          removeNode: this.removeNode,
+          fetchNodes: this.fetchNodes,
+          handleLoadApp: this.handleLoadApp,
+          handleCreateNewSecondFromNodes: this.handleCreateNewSecondFromNodes,
+          startSecond: this.startSecond,
+          state: this.state,
+          setState: this.setState,
+          makeUpdate: this.makeUpdate,
+
+        });
+
+      })
+    })
   }
 
   @autobind
