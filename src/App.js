@@ -2267,7 +2267,7 @@ class App extends Component {
   }
 
   @autobind
-  runRequest(InputNode, skipWrappingInputNode, wsClientId, socketioResponseFunc){
+  runRequest(InputNode, skipWrappingInputNode, reqObj, resObj, wsClientId, socketioResponseFunc){
     // Run the passed-in Node 
     // - use the default type:"incoming_from_universe:0.0.1:local:298fj293"
 
