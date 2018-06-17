@@ -474,8 +474,6 @@ class Request {
     this.state = opts.state;
     this.setState = opts.setState;
     this.makeUpdate = opts.makeUpdate;
-
-    this.run(opts.InputNode, opts.skipWrappingInputNode);
   }
 
   @autobind
@@ -2283,10 +2281,10 @@ class App extends Component {
       this.secondReady.then(async ()=>{
         console.log('Running browser request:', InputNode); //, this.state.nodesDb);
 
-        let NewRequest = new Request({
+        let ExternalRequest = new Request({
           requestId: uuidv4(),
-          InputNode,
-          skipWrappingInputNode,
+          // InputNode,
+          // skipWrappingInputNode,
           wsClientId,
           socketioResponseFunc,
 
@@ -2299,10 +2297,14 @@ class App extends Component {
           handleCreateNewSecondFromNodes: this.handleCreateNewSecondFromNodes,
           startSecond: this.startSecond,
           state: this.state,
-          setState: this.setState,
+          setState: this.setState.bind(this),
           makeUpdate: this.makeUpdate,
 
         });
+
+        ExternalRequest.run(InputNode, skipWrappingInputNode)
+          .then(resolve)
+          .catch(reject)
 
       })
     })
