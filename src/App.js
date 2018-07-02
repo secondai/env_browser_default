@@ -181,9 +181,11 @@ import 'brace/ext/searchbox';
 
 import GitHub from 'github-api';
 
-let socketioClient = require('socket.io-client');
+// let socketioClient = require('socket.io-client');
 
-window.socketioServers = {};
+window.sharedServices = {};
+
+// window.socketioServers = {};
 
 let RouteParser = require('route-parser');
 
@@ -646,8 +648,9 @@ class Request {
       // require,
       setValue,
       wzrd,
-      socketioClient,
-      socketioServers: window.socketioServers,
+      sharedServices: window.sharedServices,
+      // socketioClient,
+      // socketioServers: window.socketioServers,
       env: process.env, // REACT_APP...
       $,
       fetch: window.fetch.bind(window),
